@@ -1,0 +1,33 @@
+{
+  "name": "aori-ts",
+  "version": "2.5.01",
+  "description": "Aori TypeScript SDK",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1", 
+    "build": "tsc",
+    "clean": "rm -rf out",
+    "prepublish": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aori-io/aori-ts.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/aori-io/aori-ts/issues"
+  },
+  "homepage": "https://github.com/aori-io/aori-ts#readme",
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.13.5",
+    "ws": "^8.18.0"
+  }
+}
