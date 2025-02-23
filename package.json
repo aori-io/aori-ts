@@ -2,25 +2,42 @@
   "name": "aori-ts",
   "version": "2.5.01",
   "description": "Aori TypeScript SDK",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1", 
     "build": "tsc",
-    "clean": "rm -rf out",
-    "prepublish": "npm run build"
+    "clean": "rm -rf dist",
+    "prepare": "npm run clean && npm run build",
+    "prepublishOnly": "npm test && npm run lint",
+    "preversion": "npm run lint",
+    "version": "npm run format && git add -A src",
+    "postversion": "git push && git push --tags"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/aori-io/aori-ts.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "aori",
+    "ethereum",
+    "web3",
+    "sdk",
+    "trading"
+  ],
+  "author": "Aori",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/aori-io/aori-ts/issues"
   },
   "homepage": "https://github.com/aori-io/aori-ts#readme",
   "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
@@ -29,5 +46,8 @@
     "dotenv": "^16.4.7",
     "ethers": "^6.13.5",
     "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   }
 }

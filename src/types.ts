@@ -1,75 +1,70 @@
-/**
- * TODO: Implement types for: 
- * 
- * - /data
- * - /market
- * - /asset/{address}
- * 
- * - signMessage
- * - signAndSubmitTxn
- * 
- */
+export interface QuoteRequest {
+    offerer: string;
+    recipient: string;
+    inputToken: string;
+    outputToken: string;
+    inputAmount: string | number | bigint;
+    inputChain: string;
+    outputChain: string;
+}
 
-export interface AoriOrder { 
+export interface QuoteResponse {
+    orderHash: string;
+    signingHash: string;
+    offerer: string;
+    recipient: string;
+    inputToken: string;
+    outputToken: string;
+    inputAmount: string;
+    outputAmount: string;
+    inputChain: string;
+    outputChain: string;
+    startTime: number;
+    endTime: number;
+    estimatedTime: number;
+}
+
+export interface SwapRequest {
+    orderHash: string;
+    signature: string;
+}
+
+export interface SwapResponse {
+    orderHash: string;
+    offerer: string;
+    recipient: string;
+    inputToken: string;
+    outputToken: string;
+    inputAmount: string;
+    outputAmount: string;
+    inputChain: string;
+    outputChain: string;
+    startTime: number;
+    endTime: number;
+    status: string;
+    createdAt: number;
+} 
+
+export interface OrderRecord {
+    orderHash: string;
     offerer: string;
     recipient: string;
     inputToken: string;
     inputAmount: string;
+    inputValueUsd: string;
     outputToken: string;
-    startTime: string;
-    endTime: string;
-}
-
-export interface GetQuoteRequest {
-    inputToken: string;
-    outputToken: string;
-    inputAmount: string;
-    chainId: number;
-    outputChainId?: number;
-}
-
-export interface GetQuoteResponse {
-    inputToken: string;
-    outputToken: string;
-    inputAmount: string;
     outputAmount: string;
-    inputChainId: number;
-    outputChainId: number;
-    calldata: string;
-}
-
-export interface SwapGetRequest {
-    inputToken: string;
-    outputToken: string;
-    inputAmount: string;
-    inputChainId: number;
-    outputChainId?: number;
-}
-
-export interface SwapGetResponse {
-    inputToken: string;
-    outputToken: string;
-    inputAmount: string;
-    outputAmount: string;
-    inputChainId: number;
-    outputChainId: number;
-    calldata: string;
-}
-
-export interface SwapPostRequest {
-    inputToken: string;
-    outputToken: string;
-    inputAmount: string;
-    inputChainId: number;
-    outputChainId?: number;
-}
-
-export interface SwapPostResponse {
-    inputToken: string;
-    outputToken: string;
-    inputAmount: string;
-    outputAmount: string;
-    inputChainId: number;
-    outputChainId: number;
-    calldata: string;
-}
+    outputValueUsd: string;
+    inputChain: string;
+    outputChain: string;
+    startTime: number;
+    endTime: number;
+    srcTx?: string;
+    dstTx?: string;
+    status: string;
+    createdAt: number;
+    receivedAt?: number;
+    filledAt?: number;
+    confirmedAt?: number;
+    failedAt?: number;
+} 
