@@ -30,7 +30,6 @@ yarn add aori-ts
 | `POST` | `/quote`            | Get a quote                      | `<QuoteRequest>` |
 | `POST` | `/swap`             | Execute Swap                     | `<SwapRequest>`  |
 | `GET`  | `/swap/{orderHash}` | Get Swap Details/Status          | -                |
-| `PUT`  | `/swap`             | Update an OrderRecord            | `<SwapUpdate>`   |
 | `WS`   | `/stream`           | Open a Websocket Connection      | -                |
 | `GET`  | `/data`             | Query Historical Orders Database | -                |
 
