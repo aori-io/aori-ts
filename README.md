@@ -43,13 +43,12 @@ sequenceDiagram
     participant U as User
     participant API
     participant E as Engine
-    note right of U: /quote (POST)
     U->>+API: QuoteRequest
+    note right of U: /quote (POST)
     API->>API: Validate
-    API->>+E:
-    E->>E: strategy
-    E-->>-API:
-    API->>API:
+    API->>+E: Forward request
+    E->>E: Apply strategy
+    E-->>-API: Return quote
     API-->>-U: QuoteResponse
 ```
 
@@ -98,15 +97,15 @@ sequenceDiagram
     participant U as User
     participant API
     participant E as Engine
-    note right of U: /swap (POST)
     U->>+API: SwapRequest
+    note right of U: /swap (POST)
     API->>API: Validate
-    API->>+E:
-    E->>E:
-    E-->>-API:
-    API->>API:
+    API->>+E: Process swap
+    E->>E: Execute swap
+    E-->>-API: Return result
     API-->>-U: SwapResponse
 ```
+
 
 #### Example SwapRequest
 
