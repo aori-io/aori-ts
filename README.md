@@ -29,6 +29,156 @@ yarn add aori-ts
 
 ## API Reference
 
+| Method | Endpoint            | Description                      | Request Body                                                                                           |
+| ------ | ------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `GET`  | `/chains`           | Get a list of supported chains   | -                                                                                                      |
+| `POST` | `/quote`            | Get a quote                      | `<QuoteRequest>`                                                                                       |
+| `POST` | `/swap`             | Execute Swap                     | `<SwapRequest>`                                                                                        |
+| `GET`  | `/swap/{orderHash}` | Get Swap Details/Status          | -                                                                                                      |
+| `PUT`  | `/swap`             | Update an OrderRecord            | `<SwapUpdate>`                                                                                         |
+| `WS`   | `/stream`           | Open a Websocket Connection      | -                                                                                                      |
+| -      | `/account`          | Manage Accounts Database         | [More Details Here](https://github.com/aori-io/aori-backend-rs/blob/main/src/router/account/README.md) |
+| `GET`  | `/data`             | Query Historical Orders Database | -                                                                                                      |
+### `/quote`
+
+The swap endpoint acts as the primary endpoint for users to request quotes.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant API
+    participant E as Engine
+    note right of U: /quote (POST)
+    U->>+API: QuoteRequest
+    API->>API: Validate
+    API->>+E: EngineQuoteRequest
+    E->>E: strategy
+    E-->>-API: Order
+    API->>API: hash_order
+    API-->>-U: QuoteResponse
+```
+
+#### Example QuateRequest
+
+```bash
+curl -X POST https://api.aori.io/quote \
+-H "Content-Type: application/json" \
+-d '{
+    "offerer": "0x0000000000000000000000000000000000000001",
+    "recipient": "0x0000000000000000000000000000000000000001",
+    "inputToken": "0x0000000000000000000000000000000000000002",
+    "outputToken": "0x0000000000000000000000000000000000000003",
+    "inputAmount": "1000000000000000000",
+    "inputChain": "base",
+    "outputChain": "arbitrum"
+}'
+```
+
+#### Example QuoteResponse
+
+```json
+{
+  "orderHash": "0x9a3af...",
+  "signingHash": "0xas23f...",
+  "offerer": "0x0000000000000000000000000000000000000001",
+  "recipient": "0x0000000000000000000000000000000000000001",
+  "inputToken": "0x0000000000000000000000000000000000000002",
+  "outputToken": "0x0000000000000000000000000000000000000003",
+  "inputAmount": "1000000000000000000",
+  "outputAmount": "1000000000000000000",
+  "inputChain": "base",
+  "outputChain": "arbitrum",
+  "startTime": "1700000000",
+  "endTime": "1700000010",
+  "estimatedTime": 3
+}
+```
+
+### `/swap`
+
+The swap endpoint acts as the primary endpoint for users to post signed orders for execution.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant API
+    participant E as Engine
+    note right of U: /swap (POST)
+    U->>+API: SwapRequest
+    API->>API: Validate
+    API->>+E: SwapRequest
+    E->>E: Execute deposit()
+    E-->>-API: EngineSwapResponse
+    API->>API: write_db()
+    API-->>-U: SwapResponse
+```
+
+#### Example SwapRequest
+
+```bash
+curl -X POST https://api.aori.io/swap \
+-H "Content-Type: application/json" \
+-d  'orderHash: "0x...",
+    'signature': "0x...",
+```
+
+#### Example SwapResponse
+
+```json
+{
+  "orderHash": "0x9a3af...",
+  "offerer": "0x0000000000000000000000000000000000000001",
+  "recipient": "0x0000000000000000000000000000000000000001",
+  "inputToken": "0x0000000000000000000000000000000000000002",
+  "outputToken": "0x0000000000000000000000000000000000000003",
+  "inputAmount": "1000000000000000000",
+  "outputAmount": "1000000000000000000",
+  "inputChain": "base",
+  "outputChain": "arbitrum",
+  "startTime": "1700000000",
+  "endTime": "1700000010",
+  "status": "pending",
+  "createdAt": "1700000000"
+}
+```
+
+### `/data`
+
+The data endpoint acts as the primary endpoint for users to query historical orders.
+
+#### Paramas
+
+```json
+  order_hash: String,
+  offerer: String,
+  recipient: String,
+  input_token: String,
+  input_amount: String,
+  output_token: String,
+  output_amount: String,
+  input_chain: String,
+  output_chain: String,
+  src_tx: Option<String>,
+  dst_tx: Option<String>,
+  status: String, // Pending, Received, Filled, Confirmed, Failed
+  min_time: u64, // Unix timestamp, start of filter range by created_at
+  max_time: u64, // Unix timestamp, end of filter range by created_at
+  page: u64, // 1-x
+  limit: u64 // 1-100
+```
+
+## Chains
+
+| Chain    | chainKey   | chainId | eid | address                                      | blocktime | vm  |
+| -------- | ---------- | ------- | --- | -------------------------------------------- | --------- | --- |
+| Ethereum | `ethereum` | 1       | ??? | ???                                          | ???       | EVM |
+| Base     | `base`     | 8453    | ??? | `0x4F424e1c94F2918251C16bD7C62b82ee16F9fB9D` | ???       | EVM |
+| Arbitrum | `arbitrum` | 42161   | ??? | `0x48051Dfe36367c2BC4DE8de39945C6166F5fa8Ee` | ???       | EVM |
+| Optimism | `optimism` | 10      | ??? | ???                                          | ???       | EVM |
+| Solana   | `solana`   | N/A     | ??? | ???                                          | ???       | SVM |
+
+## SDK Functions
+
 ### getQuote(request: QuoteRequest, baseUrl?: string): Promise<QuoteResponse>
 Requests a quote for a token swap.
 
