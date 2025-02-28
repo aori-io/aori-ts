@@ -50,21 +50,28 @@ export async function signOrder(
   quoteResponse: QuoteResponse,
   signer: SignerType
 ): Promise<string> {
-  // Create wallet from private key
+  // Create signing key directly from private key
+  const signingKey = new ethers.SigningKey(signer.privateKey);
   const wallet = new ethers.Wallet(signer.privateKey);
-
+  wallet.signMessage
   // Remove '0x' prefix if present and convert to Uint8Array
   const signingHashHex = quoteResponse.signingHash.startsWith('0x')
-    ? quoteResponse.signingHash.slice(2)
-    : quoteResponse.signingHash;
+    ? quoteResponse.signingHash
+    : '0x' + quoteResponse.signingHash;
 
-  // Convert hex string to bytes
-  const messageBytes = ethers.getBytes('0x' + signingHashHex);
+  // Get bytes from the hash
+  const signingHashBytes = ethers.getBytes(signingHashHex);
+  
+  const signedHash = signingKey.sign(signingHashBytes);
+  
+  // Format signature
+  const formattedSignature = ethers.concat([
+    signedHash.r,
+    signedHash.s,
+    `0x${signedHash.v.toString(16).padStart(2, '0')}`
+  ]);
 
-  // Sign the hash
-  const signature = await wallet.signMessage(messageBytes);
-
-  return signature;
+  return formattedSignature;
 }
 
 
