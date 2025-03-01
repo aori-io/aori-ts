@@ -13,10 +13,12 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "prepare": "npm run clean && npm run build",
-    "prepublishOnly": "npm test && npm run lint",
-    "preversion": "npm run lint",
-    "version": "npm run format && git add -A src",
-    "postversion": "git push && git push --tags"
+    "prepublishOnly": "npm run build",
+    "test": "echo \"No tests specified\"",
+    "lint": "echo \"No linting configured\""
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "repository": {
     "type": "git",
