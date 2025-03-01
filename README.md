@@ -139,26 +139,26 @@ curl -X POST https://api.aori.io/swap \
 
 The data endpoint acts as the primary endpoint for users to query historical orders.
 
-#### Paramas
+#### Parameters
 
-```json
-  order_hash: String,
-  offerer: String,
-  recipient: String,
-  input_token: String,
-  input_amount: String,
-  output_token: String,
-  output_amount: String,
-  input_chain: String,
-  output_chain: String,
-  src_tx: Option<String>,
-  dst_tx: Option<String>,
-  status: String, // Pending, Received, Filled, Confirmed, Failed
-  min_time: u64, // Unix timestamp, start of filter range by created_at
-  max_time: u64, // Unix timestamp, end of filter range by created_at
-  page: u64, // 1-x
-  limit: u64 // 1-100
-```
+| Parameter     | Type           | Description                                           |
+| ------------- | -------------- | ----------------------------------------------------- |
+| order_hash    | String         | Hash of the order                                     |
+| offerer       | String         | Address of the order creator                          |
+| recipient     | String         | Address of the order recipient                        |
+| input_token   | String         | Address of the token being sent                       |
+| input_amount  | String         | Amount of input token                                 |
+| output_token  | String         | Address of the token being received                   |
+| output_amount | String         | Amount of output token                                |
+| input_chain   | String         | Chain key for the input token (e.g., "arbitrum")      |
+| output_chain  | String         | Chain key for the output token (e.g., "base")         |
+| src_tx        | Option<String> | Source chain transaction hash                         |
+| dst_tx        | Option<String> | Destination chain transaction hash                    |
+| status        | String         | Order status (Pending, Received, Filled, Confirmed, Failed) |
+| min_time      | u64            | Unix timestamp, start of filter range by created_at   |
+| max_time      | u64            | Unix timestamp, end of filter range by created_at     |
+| page          | u64            | Page number (1-x)                                     |
+| limit         | u64            | Results per page (1-100)                              |
 
 ## Chains
 
