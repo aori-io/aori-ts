@@ -68,3 +68,11 @@ export interface OrderRecord {
     confirmedAt?: number;
     failedAt?: number;
 } 
+
+export interface ChainInfo {
+    chainKey: string;
+    chainId: number;
+    eid: number;
+    address: string;
+    blocktime: number;
+}

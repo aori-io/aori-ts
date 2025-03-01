@@ -1,8 +1,8 @@
 import { SwapRequest, SwapResponse, QuoteRequest, QuoteResponse, OrderRecord } from './types';
 import { ethers } from 'ethers';
 import { 
-  AORI_HTTP_API,
-  AORI_API
+  AORI_API,
+  AORI_WS_API
 } from './constants';
 
 
@@ -12,7 +12,7 @@ import {
 
 export async function getQuote(
   request: QuoteRequest,
-  baseUrl: string = AORI_HTTP_API
+  baseUrl: string = AORI_API
 ): Promise<QuoteResponse> {
   const response = await fetch(`${baseUrl}/quote`, {
     method: 'POST',
@@ -81,7 +81,7 @@ export async function signOrder(
 
 export async function submitSwap(
   request: SwapRequest,
-  baseUrl: string = AORI_HTTP_API
+  baseUrl: string = AORI_API
 ): Promise<SwapResponse> {
   const response = await fetch(`${baseUrl}/swap`, {
     method: 'POST',
@@ -132,7 +132,7 @@ export class AoriWebSocket {
     private options: WebSocketOptions;
     private baseUrl: string;
 
-    constructor(baseUrl: string = AORI_API, options: WebSocketOptions = {}) {
+    constructor(baseUrl: string = AORI_WS_API, options: WebSocketOptions = {}) {
         this.baseUrl = baseUrl.replace('http', 'ws');
         this.options = options;
     }
@@ -214,7 +214,7 @@ export interface PollOrderStatusOptions {
  */
 export async function pollOrderStatus(
     orderHash: string,
-    baseUrl: string = AORI_HTTP_API,
+    baseUrl: string = AORI_API,
     options: PollOrderStatusOptions = {}
 ): Promise<OrderRecord> {
     const {
@@ -222,7 +222,7 @@ export async function pollOrderStatus(
         onComplete,
         onError,
         interval = 150,
-        timeout = 6000 // 1 minute default timeout
+        timeout = 60000
     } = options;
 
     let lastStatus: string | null = null;
@@ -253,8 +253,8 @@ export async function pollOrderStatus(
                     onStatusChange?.(order.status, order);
                 }
 
-                // Check if order is complete (filled and has destination tx)
-                if (order.status === 'filled' && order.dstTx) {
+                // FIXED: Check for completed, failed, or src_failed status
+                if (order.status === 'completed' || order.status === 'failed' || order.status === 'src_failed') {
                     onComplete?.(order);
                     resolve(order);
                     return;
@@ -293,7 +293,7 @@ export interface ChainInfo {
 * @returns Promise that resolves with an array of chain information
 */
 export async function getChains(
-  baseUrl: string = AORI_HTTP_API
+  baseUrl: string = AORI_API
 ): Promise<ChainInfo[]> {
   const response = await fetch(`${baseUrl}/chains`);
 
