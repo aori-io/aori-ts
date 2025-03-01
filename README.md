@@ -7,19 +7,19 @@ Aori TypeScript SDK for interacting with the Aori API.
 ## Installation
 
 ```bash
-npm install aori-ts
+npm install @aori/aori-ts
 ```
 
 or
 
 ```bash
-bun add aori-ts
+bun add @aori/aori-ts
 ```
 
 or
 
 ```bash
-yarn add aori-ts
+yarn add @aori/aori-ts
 ```
 
 ## API Reference
@@ -41,7 +41,7 @@ The swap endpoint acts as the primary endpoint for users to request quotes.
 sequenceDiagram
     participant U as User
     participant API
-    participant E as Engine
+    participant E as Solver
     U->>+API: QuoteRequest
     note right of U: /quote (POST)
     API->>API: Validate
@@ -95,7 +95,7 @@ The swap endpoint acts as the primary endpoint for users to post signed orders f
 sequenceDiagram
     participant U as User
     participant API
-    participant E as Engine
+    participant E as Solver
     U->>+API: SwapRequest
     note right of U: /swap (POST)
     API->>API: Validate
@@ -313,17 +313,17 @@ import { getChains } from "aori-ts";
 try {
   const chains = await getChains();
   console.log("Supported chains:", chains);
+} catch (error) {
+  console.error("Failed to fetch chains:", error);
+}
+
   // Example chain info:
   // {
   //   chainKey: "ethereum",
   //   chainId: 1,
   //   eid: 1,
   //   address: "0x...",
-  //   blocktime: 12
   // }
-} catch (error) {
-  console.error("Failed to fetch chains:", error);
-}
 ```
 
 ## Executing an Order with a Wallet in a frontend application
@@ -391,83 +391,6 @@ function SwapComponent() {
   };
 
   return <button onClick={handleSwap}>Swap Tokens</button>;
-}
-```
-
-### Full React component with loading states and error handling
-
-```typescript
-function FullSwapComponent() {
-  const { address } = useAccount();
-  const { signMessageAsync } = useSignMessage();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
-
-  const handleSwap = async () => {
-    setLoading(true);
-    setError(null);
-    setStatus("Getting quote...");
-
-    try {
-      // 1. Get quote
-      const quote = await getQuote({
-        offerer: address,
-        recipient: address,
-        inputToken: "0x...",
-        outputToken: "0x...",
-        inputAmount: "1000000000000000000",
-        inputChain: "base",
-        outputChain: "arbitrum",
-      });
-
-      setStatus("Signing order...");
-
-      // 2. Sign the order
-      const messageToSign = ethers.getBytes("0x" + quote.signingHash.slice(2));
-      const signature = await signMessageAsync({
-        message: { raw: messageToSign },
-      });
-
-      setStatus("Submitting swap...");
-
-      // 3. Submit swap
-      const swapResponse = await submitSwap({
-        orderHash: quote.orderHash,
-        signature: signature,
-      });
-
-      // 4. Poll for updates
-      pollOrderStatus(swapResponse.orderHash, undefined, {
-        onStatusChange: (status) => {
-          setStatus(`Swap status: ${status}`);
-        },
-        onComplete: () => {
-          setStatus("Swap completed!");
-          setLoading(false);
-        },
-        onError: (error) => {
-          setError(error.message);
-          setLoading(false);
-        },
-      });
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Swap failed");
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div>
-      <button onClick={handleSwap} disabled={loading || !address}>
-        {loading ? "Processing..." : "Swap Tokens"}
-      </button>
-
-      {status && <div>Status: {status}</div>}
-
-      {error && <div style={{ color: "red" }}>Error: {error}</div>}
-    </div>
-  );
 }
 ```
 
