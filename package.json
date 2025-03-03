@@ -1,6 +1,6 @@
 {
   "name": "@aori/aori-ts",
-  "version": "0.0.01",
+  "version": "0.0.2",
   "description": "Aori TypeScript SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,7 +15,14 @@
     "prepare": "npm run clean && npm run build",
     "prepublishOnly": "npm run build",
     "test": "echo \"No tests specified\"",
-    "lint": "echo \"No linting configured\""
+    "lint": "echo \"No linting configured\"",
+    "version:patch": "npm version patch",
+    "version:minor": "npm version minor",
+    "version:major": "npm version major",
+    "prerelease": "npm version prerelease --preid=beta",
+    "release": "npm publish",
+    "version:custom": "node scripts/version.js",
+    "postversion": "git push && git push --tags"
   },
   "publishConfig": {
     "access": "public"
