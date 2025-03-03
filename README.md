@@ -1,10 +1,12 @@
 # Aori TypeScript SDK
 
-Aori TypeScript SDK for interacting with the Aori API.
+![aori-ts banner](https://github.com/aori-io/.github-private/blob/main/assets/public/aori-ts.png)
 
 [![https://devs.aori.io](https://img.shields.io/badge/🗨_telegram_chat-0088cc)](https://devs.aori.io) ![GitHub issues](https://img.shields.io/github/issues-raw/aori-io/aori-ts?color=blue)
 
-## Installation
+## Getting Started
+
+#### Installation 
 
 ```bash
 npm install @aori/aori-ts
@@ -22,6 +24,12 @@ or
 yarn add @aori/aori-ts
 ```
 
+#### Authorization
+
+Interacting with the Aori API does not currently require an API key, although it is recommended you visit the [Aori Developer Portal](https://developers.aori.io) to receive an integrator ID to be provided tracking and analytics on your integration.
+
+
+
 ## API Reference
 
 | Method | Endpoint            | Description                      | Request Body     |
@@ -36,20 +44,6 @@ yarn add @aori/aori-ts
 ### `/quote`
 
 The swap endpoint acts as the primary endpoint for users to request quotes.
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant API
-    participant E as Solver
-    U->>+API: QuoteRequest
-    note right of U: /quote (POST)
-    API->>API: Validate
-    API->>+E: Forward request
-    E->>E: Apply strategy
-    E-->>-API: Return quote
-    API-->>-U: QuoteResponse
-```
 
 #### Example QuateRequest
 
@@ -83,28 +77,13 @@ curl -X POST https://api.aori.io/quote \
   "outputChain": "arbitrum",
   "startTime": "1700000000",
   "endTime": "1700000010",
-  "estimatedTime": 3
+  "estimatedTime": 3000 // in milliseconds
 }
 ```
 
 ### `/swap`
 
 The swap endpoint acts as the primary endpoint for users to post signed orders for execution.
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant API
-    participant E as Solver
-    U->>+API: SwapRequest
-    note right of U: /swap (POST)
-    API->>API: Validate
-    API->>+E: Process swap
-    E->>E: Execute swap
-    E-->>-API: Return result
-    API-->>-U: SwapResponse
-```
-
 
 #### Example SwapRequest
 
