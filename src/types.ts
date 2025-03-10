@@ -22,6 +22,8 @@ export interface QuoteResponse {
     startTime: number;
     endTime: number;
     estimatedTime: number;
+    exclusiveSolver: string;
+    exclusiveSolverDuration: number;
 }
 
 export interface SwapRequest {

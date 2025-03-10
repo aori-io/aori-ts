@@ -75,7 +75,9 @@ curl -X POST https://api.aori.io/quote \
   "outputChain": "arbitrum",
   "startTime": "1700000000",
   "endTime": "1700000010",
-  "estimatedTime": 3000 // in milliseconds
+  "estimatedTime": 3000, // in milliseconds
+  "exclusiveSolver": "0x0000000000000000000000000000000000000000",
+  "exclusiveSolverDuration": 0
 }
 ```
 
@@ -149,14 +151,15 @@ The data endpoint acts as the primary endpoint for users to query historical ord
 
 ## SDK Functions
 
-| Function              | Description                                                   | Parameters                                                              | Return Type              |
-| --------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------ |
-| `getQuote`            | Requests a quote for a token swap                             | `request: QuoteRequest, baseUrl?: string`                               | `Promise<QuoteResponse>` |
-| `signOrder`           | Signs an order using the provided private key                 | `quoteResponse: QuoteResponse, signer: SignerType`                      | `Promise<string>`        |
-| `submitSwap`          | Submits a signed swap order to the Aori API                   | `request: SwapRequest, baseUrl?: string`                                | `Promise<SwapResponse>`  |
-| `class AoriWebSocket` | WebSocket client for real-time order updates                  | -                                                                       | -                        |
-| `pollOrderStatus`     | Polls the status of an order until completion or timeout      | `orderHash: string, baseUrl?: string, options?: PollOrderStatusOptions` | `Promise<OrderRecord>`   |
-| `getChains`           | Fetches the list of supported chains and their configurations | `baseUrl?: string`                                                      | `Promise<ChainInfo[]>`   |
+| Function              | Description                                                   | Parameters                                                              | Return Type                                |
+| --------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------ |
+| `getQuote`            | Requests a quote for a token swap                             | `request: QuoteRequest, baseUrl?: string`                               | `Promise<QuoteResponse>`                   |
+| `signOrder`           | Signs an order using the provided private key                 | `quoteResponse: QuoteResponse, signer: SignerType`                      | `Promise<string>`                          |
+| `signReadableOrder`   | Signs an order using EIP-712 typed data (for wallet clients)  | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string` | `Promise<{orderHash: string, signature: string}>` |
+| `submitSwap`          | Submits a signed swap order to the Aori API                   | `request: SwapRequest, baseUrl?: string`                                | `Promise<SwapResponse>`                    |
+| `class AoriWebSocket` | WebSocket client for real-time order updates                  | -                                                                       | -                                          |
+| `pollOrderStatus`     | Polls the status of an order until completion or timeout      | `orderHash: string, baseUrl?: string, options?: PollOrderStatusOptions` | `Promise<OrderRecord>`                     |
+| `getChains`           | Fetches the list of supported chains and their configurations | `baseUrl?: string`                                                      | `Promise<ChainInfo[]>`                     |
 
 ## Usage Examples
 
@@ -184,7 +187,7 @@ try {
 }
 ```
 
-### Signing an Order
+### Signing an Order with Private Key
 
 ```typescript
 import { signOrder } from "aori-ts";
@@ -195,6 +198,41 @@ const signer = {
 
 try {
   const signature = await signOrder(quoteResponse, signer);
+  console.log("Order signed:", signature);
+} catch (error) {
+  console.error("Failed to sign order:", error);
+}
+```
+
+### Signing an Order with a Wallet Client (EIP-712)
+
+```typescript
+import { signReadableOrder } from "aori-ts";
+
+// Create a wrapper for your wallet client (viem, ethers, etc.)
+const walletClientWrapper = {
+  signTypedData: async (params) => {
+    // For viem:
+    return signTypedData(walletClient, {
+      account: params.account,
+      domain: params.domain,
+      types: params.types,
+      primaryType: params.primaryType,
+      message: params.message
+    });
+    
+    // For ethers v6:
+    // return wallet._signTypedData(params.domain, params.types, params.message);
+  }
+};
+
+try {
+  const { orderHash, signature } = await signReadableOrder(
+    quoteResponse,
+    walletClientWrapper,
+    userAddress
+  );
+  
   console.log("Order signed:", signature);
 } catch (error) {
   console.error("Failed to sign order:", error);
@@ -305,23 +343,15 @@ try {
 
 ## Executing an Order with a Wallet in a frontend application
 
-This example demonstrates how to:
-
-- Use wagmi hooks for wallet connection and signing
-- Handle loading states and error messages
-- Show transaction status updates to users
-- Properly type and handle all API responses
-- Manage component state during the swap process
+This example demonstrates how to use the SDK with a wallet in a frontend application:
 
 ```typescript
-import { useAccount, useSignMessage } from "wagmi";
-import { getQuote } from "aori-ts";
-import { ethers } from "ethers";
+import { useAccount } from "wagmi";
+import { getQuote, signReadableOrder, submitSwap, pollOrderStatus } from "aori-ts";
 
 // React component example
 function SwapComponent() {
-  const { address } = useAccount();
-  const { signMessageAsync } = useSignMessage();
+  const { address, connector } = useAccount();
 
   const handleSwap = async () => {
     try {
@@ -338,22 +368,39 @@ function SwapComponent() {
 
       const quote = await getQuote(quoteRequest);
 
-      // 2. Sign the order using wagmi
-      const messageToSign = ethers.getBytes("0x" + quote.signingHash.slice(2));
-      const signature = await signMessageAsync({
-        message: { raw: messageToSign },
-      });
+      // 2. Get the wallet client
+      const walletClient = await connector?.getWalletClient();
+      
+      // 3. Create a wrapper for the wallet client
+      const walletWrapper = {
+        signTypedData: async (params) => {
+          return walletClient.signTypedData({
+            account: params.account,
+            domain: params.domain,
+            types: params.types,
+            primaryType: params.primaryType,
+            message: params.message
+          });
+        }
+      };
 
-      // 3. Submit the swap with signature
+      // 4. Sign the order using EIP-712
+      const { orderHash, signature } = await signReadableOrder(
+        quote,
+        walletWrapper,
+        address
+      );
+
+      // 5. Submit the swap with signature
       const swapRequest = {
-        orderHash: quote.orderHash,
-        signature: signature,
+        orderHash,
+        signature,
       };
 
       const swapResponse = await submitSwap(swapRequest);
       console.log("Swap submitted successfully:", swapResponse);
 
-      // 4. Optional: Poll for status updates
+      // 6. Optional: Poll for status updates
       pollOrderStatus(swapResponse.orderHash, undefined, {
         onStatusChange: (status) => {
           console.log(`Order status: ${status}`);
