@@ -92,12 +92,14 @@ export interface TypedDataSigner {
  * @param quoteResponse The quote response containing order details
  * @param signer The wallet client that can sign typed data
  * @param userAddress The address of the user signing the order
+ * @param baseUrl Optional base URL for the API
  * @returns The signature and orderHash
  */
 export async function signReadableOrder(
   quoteResponse: QuoteResponse,
   signer: TypedDataSigner,
-  userAddress: string
+  userAddress: string,
+  baseUrl: string = AORI_API
 ): Promise<{ orderHash: string; signature: string }> {
   // Get chain information from the constants
   const inputChainInfo = getChainInfoByKey(quoteResponse.inputChain);
@@ -183,47 +185,6 @@ export async function signReadableOrder(
   };
 } 
 
-//////////////////////////////////////////////////////////////*/
-//                     SUBMIT A SWAP
-//////////////////////////////////////////////////////////////*/
-
-export async function submitSwap(
-  request: SwapRequest,
-  baseUrl: string = AORI_API
-): Promise<SwapResponse> {
-  const response = await fetch(`${baseUrl}/swap`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      orderHash: request.orderHash,
-      signature: request.signature,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Swap request failed: ${await response.text()}`);
-  }
-
-  const data = await response.json();
-  return {
-    orderHash: data.orderHash,
-    offerer: data.offerer,
-    recipient: data.recipient,
-    inputToken: data.inputToken,
-    outputToken: data.outputToken,
-    inputAmount: data.inputAmount,
-    outputAmount: data.outputAmount,
-    inputChain: data.inputChain,
-    outputChain: data.outputChain,
-    startTime: data.startTime,
-    endTime: data.endTime,
-    status: data.status,
-    createdAt: data.createdAt,
-  };
-} 
-
 ////////////////////////////////////////////////////////////////*/
 //                     CONNECT TO WEBSOCKET
 //////////////////////////////////////////////////////////////*/
@@ -299,6 +260,47 @@ export class AoriWebSocket {
     public isConnected(): boolean {
         return this.ws?.readyState === WebSocket.OPEN;
     }
+}
+
+//////////////////////////////////////////////////////////////*/
+//                     SUBMIT A SWAP
+//////////////////////////////////////////////////////////////*/
+
+export async function submitSwap(
+  request: SwapRequest,
+  baseUrl: string = AORI_API
+): Promise<SwapResponse> {
+  const response = await fetch(`${baseUrl}/swap`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      orderHash: request.orderHash,
+      signature: request.signature,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Swap request failed: ${await response.text()}`);
+  }
+
+  const data = await response.json();
+  return {
+    orderHash: data.orderHash,
+    offerer: data.offerer,
+    recipient: data.recipient,
+    inputToken: data.inputToken,
+    outputToken: data.outputToken,
+    inputAmount: data.inputAmount,
+    outputAmount: data.outputAmount,
+    inputChain: data.inputChain,
+    outputChain: data.outputChain,
+    startTime: data.startTime,
+    endTime: data.endTime,
+    status: data.status,
+    createdAt: data.createdAt,
+  };
 } 
 
 ////////////////////////////////////////////////////////////////*/
@@ -347,7 +349,8 @@ export async function pollOrderStatus(
                     return;
                 }
 
-                const response = await fetch(`${baseUrl}/swap/${orderHash}`);
+                // Updated endpoint path to match the backend handler
+                const response = await fetch(`${baseUrl}/data/status/${orderHash}`);
                 
                 if (!response.ok) {
                     throw new Error(`Failed to fetch order status: ${await response.text()}`);
@@ -361,7 +364,7 @@ export async function pollOrderStatus(
                     onStatusChange?.(order.status, order);
                 }
 
-                // FIXED: Check for completed, failed, or src_failed status
+                // Check for completed, failed, or src_failed status
                 if (order.status === 'completed' || order.status === 'failed' || order.status === 'src_failed') {
                     onComplete?.(order);
                     resolve(order);

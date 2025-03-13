@@ -9,16 +9,17 @@
 #### Installation
 
 ```bash
-npm install @aori/aori-ts
+bun add @aori/aori-ts
 ```
 
 or
 
 ```bash
-bun add @aori/aori-ts
+npm install @aori/aori-ts
 ```
 
 or
+
 
 ```bash
 yarn add @aori/aori-ts
@@ -35,9 +36,9 @@ Interacting with the Aori API does not currently require an API key, although it
 | `GET`  | `/chains`           | Get a list of supported chains   | -                |
 | `POST` | `/quote`            | Get a quote                      | `<QuoteRequest>` |
 | `POST` | `/swap`             | Execute Swap                     | `<SwapRequest>`  |
-| `GET`  | `/swap/{orderHash}` | Get Swap Details/Status          | -                |
-| `WS`   | `/stream`           | Open a Websocket Connection      | -                |
 | `GET`  | `/data`             | Query Historical Orders Database | -                |
+| `GET`  | `/data/status/{orderHash}` | Get Swap Details/Status          | -                |
+| `WS`   | `/stream`           | Open a Websocket Connection      | -                |
 
 ### `/quote`
 
@@ -319,6 +320,8 @@ try {
   console.error("Order polling failed:", error);
 }
 ```
+
+The `pollOrderStatus` function polls the `/data/status/{orderHash}` endpoint to get real-time updates on the status of an order. It will continue polling until the order reaches a terminal state (completed, failed, or src_failed) or until the timeout is reached.
 
 ### Getting Supported Chains
 
