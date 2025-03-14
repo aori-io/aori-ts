@@ -47,13 +47,14 @@ The swap endpoint acts as the primary endpoint for users to request quotes.
 #### Example QuateRequest
 
 ```bash
-curl -X POST https://api.aori.io/quote \
+curl -X POST https://v3development.api.aori.io/quote \
 -H "Content-Type: application/json" \
+-H "X-API-KEY: your_api_key_here" \
 -d '{
-    "offerer": "0x0000000000000000000000000000000000000001",
-    "recipient": "0x0000000000000000000000000000000000000001",
-    "inputToken": "0x0000000000000000000000000000000000000002",
-    "outputToken": "0x0000000000000000000000000000000000000003",
+    "offerer": "0x0000000000000000000000000000000000000000",
+    "recipient": "0x0000000000000000000000000000000000000000",
+    "inputToken": "0x4200000000000000000000000000000000000006",
+    "outputToken": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
     "inputAmount": "1000000000000000000",
     "inputChain": "base",
     "outputChain": "arbitrum"
