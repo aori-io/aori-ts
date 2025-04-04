@@ -118,22 +118,19 @@ export async function signReadableOrder(
     EIP712Domain: [
       { name: "name", type: "string" },
       { name: "version", type: "string" },
-      { name: "chainId", type: "uint256" },
       { name: "verifyingContract", type: "address" }
     ],
     Order: [
-      { name: "offerer", type: "address" },
-      { name: "recipient", type: "address" },
+      { name: "inputAmount", type: "uint128" },
+      { name: "outputAmount", type: "uint128" },
       { name: "inputToken", type: "address" },
       { name: "outputToken", type: "address" },
-      { name: "exclusiveSolver", type: "address" },
-      { name: "inputAmount", type: "uint256" },
-      { name: "outputAmount", type: "uint256" },
-      { name: "startTime", type: "uint256" },
-      { name: "endTime", type: "uint256" },
+      { name: "startTime", type: "uint32" },
+      { name: "endTime", type: "uint32" },
       { name: "srcEid", type: "uint32" },
       { name: "dstEid", type: "uint32" },
-      { name: "exclusiveSolverDuration", type: "uint16" }
+      { name: "offerer", type: "address" },
+      { name: "recipient", type: "address" },
     ]
   };
   
