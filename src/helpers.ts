@@ -1,11 +1,34 @@
-import { SwapRequest, SwapResponse, QuoteRequest, QuoteResponse, OrderRecord, ChainInfo } from './types';
+import { SwapRequest, SwapResponse, QuoteRequest, QuoteResponse, OrderRecord, ChainInfo, OrderStatus, QueryOrdersRequest, QueryOrdersResponse } from './types';
 import { ethers } from 'ethers';
-import { 
+import axios from 'axios';
+import {
   AORI_API,
   AORI_WS_API,
   getChainInfoByKey
 } from './constants';
 
+////////////////////////////////////////////////////////////////*/
+//                      GET SUPPORTED CHAINS
+//////////////////////////////////////////////////////////////*/
+
+/**
+* Fetches the list of supported chains and their configurations
+* @param baseUrl The base URL of the API
+* @returns Promise that resolves with an array of chain information
+*/
+export async function getChains(
+  baseUrl: string = AORI_API
+): Promise<ChainInfo[]> {
+  try {
+    const response = await axios.get(`${baseUrl}/chains`);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(`Failed to fetch chains: ${error.response.data}`);
+    }
+    throw new Error(`Failed to fetch chains: ${error}`);
+  }
+}
 
 ////////////////////////////////////////////////////////////////*/
 //                     REQUEST A QUOTE
@@ -15,22 +38,18 @@ export async function getQuote(
   request: QuoteRequest,
   baseUrl: string = AORI_API
 ): Promise<QuoteResponse> {
-  const response = await fetch(`${baseUrl}/quote`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
+  try {
+    const response = await axios.post(`${baseUrl}/quote`, {
       ...request,
       inputAmount: request.inputAmount.toString(), // Convert any number type to string
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Quote request failed: ${await response.text()}`);
+    });
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(`Quote request failed: ${error.response.data}`);
+    }
+    throw new Error(`Quote request failed: ${error}`);
   }
-
-  return await response.json();
 }
 
 
@@ -62,9 +81,9 @@ export async function signOrder(
 
   // Get bytes from the hash
   const signingHashBytes = ethers.getBytes(signingHashHex);
-  
+
   const signedHash = signingKey.sign(signingHashBytes);
-  
+
   // Format signature
   const formattedSignature = ethers.concat([
     signedHash.r,
@@ -104,15 +123,15 @@ export async function signReadableOrder(
   // Get chain information from the constants
   const inputChainInfo = getChainInfoByKey(quoteResponse.inputChain);
   const outputChainInfo = getChainInfoByKey(quoteResponse.outputChain);
-  
+
   if (!inputChainInfo) {
     throw new Error(`Chain information not found for ${quoteResponse.inputChain}`);
   }
-  
+
   if (!outputChainInfo) {
     throw new Error(`Chain information not found for ${quoteResponse.outputChain}`);
   }
-  
+
   // Define the types for EIP-712 typed data
   const types = {
     EIP712Domain: [
@@ -133,32 +152,30 @@ export async function signReadableOrder(
       { name: "recipient", type: "address" },
     ]
   };
-  
+
   // Convert numeric startTime/endTime to strings if needed
-  const startTimeStr = typeof quoteResponse.startTime === 'number' 
-    ? quoteResponse.startTime.toString() 
+  const startTimeStr = typeof quoteResponse.startTime === 'number'
+    ? quoteResponse.startTime.toString()
     : quoteResponse.startTime;
-  
+
   const endTimeStr = typeof quoteResponse.endTime === 'number'
     ? quoteResponse.endTime.toString()
     : quoteResponse.endTime;
-  
+
   // Construct the message from the QuoteResponse
   const message = {
     offerer: quoteResponse.offerer,
     recipient: quoteResponse.recipient,
     inputToken: quoteResponse.inputToken,
     outputToken: quoteResponse.outputToken,
-    exclusiveSolver: quoteResponse.exclusiveSolver,
     inputAmount: BigInt(quoteResponse.inputAmount),
     outputAmount: BigInt(quoteResponse.outputAmount),
     startTime: BigInt(Number(startTimeStr)),
     endTime: BigInt(Number(endTimeStr)),
     srcEid: inputChainInfo.eid,
     dstEid: outputChainInfo.eid,
-    exclusiveSolverDuration: quoteResponse.exclusiveSolverDuration,
   };
-  
+
   // Create the domain object
   const domain = {
     name: "Aori",
@@ -166,7 +183,7 @@ export async function signReadableOrder(
     chainId: BigInt(inputChainInfo.chainId),
     verifyingContract: inputChainInfo.address
   };
-  
+
   // Sign the typed data
   const signature = await signer.signTypedData({
     account: userAddress,
@@ -175,88 +192,11 @@ export async function signReadableOrder(
     primaryType: "Order",
     message
   });
-  
+
   return {
     orderHash: quoteResponse.orderHash,
     signature
   };
-} 
-
-////////////////////////////////////////////////////////////////*/
-//                     CONNECT TO WEBSOCKET
-//////////////////////////////////////////////////////////////*/
-
-export interface WebSocketOptions {
-    onMessage?: (order: OrderRecord) => void;
-    onConnect?: () => void;
-    onDisconnect?: (event: CloseEvent) => void;
-    onError?: (error: Event) => void;
-}
-
-export class AoriWebSocket {
-    private ws: WebSocket | null = null;
-    private options: WebSocketOptions;
-    private baseUrl: string;
-
-    constructor(baseUrl: string = AORI_WS_API, options: WebSocketOptions = {}) {
-        this.baseUrl = baseUrl.replace('http', 'ws');
-        this.options = options;
-    }
-
-    /**
-     * Connect to the Aori WebSocket server
-     * @returns Promise that resolves when connection is established
-     */
-    public connect(): Promise<void> {
-        return new Promise((resolve, reject) => {
-            try {
-                this.ws = new WebSocket(`${this.baseUrl}/ws`);
-
-                this.ws.onopen = () => {
-                    this.options.onConnect?.();
-                    resolve();
-                };
-
-                this.ws.onmessage = (event) => {
-                    try {
-                        const order: OrderRecord = JSON.parse(event.data);
-                        this.options.onMessage?.(order);
-                    } catch (error) {
-                        console.error('Failed to parse WebSocket message:', error);
-                    }
-                };
-
-                this.ws.onclose = (event) => {
-                    this.options.onDisconnect?.(event);
-                };
-
-                this.ws.onerror = (error) => {
-                    this.options.onError?.(error);
-                    reject(error);
-                };
-
-            } catch (error) {
-                reject(error);
-            }
-        });
-    }
-
-    /**
-     * Disconnect from the WebSocket server
-     */
-    public disconnect(): void {
-        if (this.ws) {
-            this.ws.close();
-            this.ws = null;
-        }
-    }
-
-    /**
-     * Check if the WebSocket is currently connected
-     */
-    public isConnected(): boolean {
-        return this.ws?.readyState === WebSocket.OPEN;
-    }
 }
 
 //////////////////////////////////////////////////////////////*/
@@ -267,140 +207,230 @@ export async function submitSwap(
   request: SwapRequest,
   baseUrl: string = AORI_API
 ): Promise<SwapResponse> {
-  const response = await fetch(`${baseUrl}/swap`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
+  try {
+    const response = await axios.post(`${baseUrl}/swap`, {
       orderHash: request.orderHash,
       signature: request.signature,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Swap request failed: ${await response.text()}`);
+    });
+    
+    const data = response.data;
+    return {
+      orderHash: data.orderHash,
+      offerer: data.offerer,
+      recipient: data.recipient,
+      inputToken: data.inputToken,
+      outputToken: data.outputToken,
+      inputAmount: data.inputAmount,
+      outputAmount: data.outputAmount,
+      inputChain: data.inputChain,
+      outputChain: data.outputChain,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      status: data.status,
+      createdAt: data.createdAt,
+    };
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(`Swap request failed: ${error.response.data}`);
+    }
+    throw new Error(`Swap request failed: ${error}`);
   }
-
-  const data = await response.json();
-  return {
-    orderHash: data.orderHash,
-    offerer: data.offerer,
-    recipient: data.recipient,
-    inputToken: data.inputToken,
-    outputToken: data.outputToken,
-    inputAmount: data.inputAmount,
-    outputAmount: data.outputAmount,
-    inputChain: data.inputChain,
-    outputChain: data.outputChain,
-    startTime: data.startTime,
-    endTime: data.endTime,
-    status: data.status,
-    createdAt: data.createdAt,
-  };
-} 
+}
 
 ////////////////////////////////////////////////////////////////*/
-//                   POLL FOR ORDER STATUS
+//                   GET ORDER STATUS
 //////////////////////////////////////////////////////////////*/
 
-export interface PollOrderStatusOptions {
-    onStatusChange?: (status: string, order: OrderRecord) => void;
-    onComplete?: (order: OrderRecord) => void;
-    onError?: (error: Error) => void;
-    interval?: number;
-    timeout?: number;
+/**
+ * Fetches the current status of an order
+ * @param orderHash The hash of the order to check
+ * @param baseUrl The base URL of the API
+ * @returns A promise that resolves with the order status
+ */
+export async function getOrderStatus(
+  orderHash: string,
+  baseUrl: string = AORI_API
+): Promise<OrderStatus> {
+  try {
+    const response = await axios.get(`${baseUrl}/data/status/${orderHash}`);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(`Failed to fetch order status: ${error.response.data}`);
+    }
+    throw new Error(`Failed to fetch order status: ${error}`);
+  }
+}
+
+////////////////////////////////////////////////////////////////*/
+//                   GET ORDER DETAILS
+//////////////////////////////////////////////////////////////*/
+
+/**
+ * Fetches detailed information about an order
+ * @param orderHash The hash of the order to get details for
+ * @param baseUrl The base URL of the API
+ * @returns A promise that resolves with the order details
+ */
+export async function getOrderDetails(
+  orderHash: string,
+  baseUrl: string = AORI_API
+): Promise<OrderRecord> {
+  try {
+    const response = await axios.get(`${baseUrl}/data/details/${orderHash}`);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(`Failed to fetch order details: ${error.response.data}`);
+    }
+    throw new Error(`Failed to fetch order details: ${error}`);
+  }
+}
+
+////////////////////////////////////////////////////////////////*/
+//                     CONNECT TO WEBSOCKET
+//////////////////////////////////////////////////////////////*/
+
+/**
+ * Converts an object to URL query parameters
+ * 
+ * @param params - Object containing query parameters
+ * @returns URL-encoded query string
+ */
+function objectToQueryParams(params: Record<string, any>): string {
+  return Object.entries(params)
+    .filter(([_, value]) => value !== undefined && value !== null) // Filter out undefined/null values
+    .map(([key, value]) => {
+      // Handle dates by converting to timestamps
+      if (value instanceof Date) {
+        return `${encodeURIComponent(key)}=${encodeURIComponent(Math.floor(value.getTime() / 1000))}`;
+      }
+      return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+    })
+    .join('&');
 }
 
 /**
- * Polls the order status until it's filled and has a destination transaction hash
- * @param orderHash The hash of the order to poll
- * @param baseUrl The base URL of the API
- * @param options Polling options and callbacks
- * @returns A promise that resolves with the final order status
+ * Queries orders with filtering criteria
+ * 
+ * @param baseUrl - The base URL of the API server
+ * @param params - Parameters to filter the orders by
+ * @returns A promise that resolves to the query results
+ * @throws Will throw an error if the request fails
  */
-export async function pollOrderStatus(
-    orderHash: string,
-    baseUrl: string = AORI_API,
-    options: PollOrderStatusOptions = {}
-): Promise<OrderRecord> {
-    const {
-        onStatusChange,
-        onComplete,
-        onError,
-        interval = 150,
-        timeout = 60000
-    } = options;
-
-    let lastStatus: string | null = null;
-    const startTime = Date.now();
-
-    return new Promise((resolve, reject) => {
-        const checkStatus = async () => {
-            try {
-                // Check if we've exceeded the timeout
-                if (Date.now() - startTime > timeout) {
-                    const error = new Error('Order status polling timed out');
-                    onError?.(error);
-                    reject(error);
-                    return;
-                }
-
-                // Updated endpoint path to match the backend handler
-                const response = await fetch(`${baseUrl}/data/status/${orderHash}`);
-                
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch order status: ${await response.text()}`);
-                }
-
-                const order: OrderRecord = await response.json();
-
-                // Notify if status has changed
-                if (order.status !== lastStatus) {
-                    lastStatus = order.status;
-                    onStatusChange?.(order.status, order);
-                }
-
-                // Check for completed, failed, or src_failed status
-                if (order.status === 'completed' || order.status === 'failed' || order.status === 'src_failed') {
-                    onComplete?.(order);
-                    resolve(order);
-                    return;
-                }
-
-                // Continue polling
-                setTimeout(checkStatus, interval);
-
-            } catch (error) {
-                const err = error instanceof Error ? error : new Error(String(error));
-                onError?.(err);
-                reject(err);
-            }
-        };
-
-        // Start polling
-        checkStatus();
+export async function queryOrders(
+  baseUrl: string,
+  params: QueryOrdersRequest
+): Promise<QueryOrdersResponse> {
+  try {
+    const response = await axios.get(`${baseUrl}/data/query`, {
+      params: params
     });
-} 
+    
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 404) {
+        // Return empty result with pagination
+        return {
+          orders: [],
+          pagination: {
+            current_page: params.page || 1,
+            limit: params.limit || 10,
+            total_records: 0,
+            total_pages: 0
+          }
+        };
+      }
+      
+      if (error.response?.data) {
+        throw new Error(`API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
+      }
+    }
+    
+    throw new Error(`Failed to query orders: ${String(error)}`);
+  }
+}
 
 ////////////////////////////////////////////////////////////////*/
-//                      GET SUPPORTED CHAINS
+//                     CONNECT TO WEBSOCKET
 //////////////////////////////////////////////////////////////*/
 
-/**
-* Fetches the list of supported chains and their configurations
-* @param baseUrl The base URL of the API
-* @returns Promise that resolves with an array of chain information
-*/
-export async function getChains(
-  baseUrl: string = AORI_API
-): Promise<ChainInfo[]> {
-  const response = await fetch(`${baseUrl}/chains`);
+export interface WebSocketOptions {
+  onMessage?: (order: OrderRecord) => void;
+  onConnect?: () => void;
+  onDisconnect?: (event: CloseEvent) => void;
+  onError?: (error: Event) => void;
+}
 
-  if (!response.ok) {
-      throw new Error(`Failed to fetch chains: ${await response.text()}`);
+export class AoriWebSocket {
+  private ws: WebSocket | null = null;
+  private options: WebSocketOptions;
+  private baseUrl: string;
+
+  constructor(baseUrl: string = AORI_WS_API, options: WebSocketOptions = {}) {
+    this.baseUrl = baseUrl.replace('http', 'ws');
+    this.options = options;
   }
 
-  const chains: ChainInfo[] = await response.json();
-  return chains;
-} 
+  /**
+   * Connect to the Aori WebSocket server
+   * @returns Promise that resolves when connection is established
+   */
+  public connect(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        this.ws = new WebSocket(`${this.baseUrl}/ws`);
+
+        this.ws.onopen = () => {
+          this.options.onConnect?.();
+          resolve();
+        };
+
+        this.ws.onmessage = (event) => {
+          try {
+            const order: OrderRecord = JSON.parse(event.data);
+            this.options.onMessage?.(order);
+          } catch (error) {
+            console.error('Failed to parse WebSocket message:', error);
+          }
+        };
+
+        this.ws.onclose = (event) => {
+          this.options.onDisconnect?.(event);
+        };
+
+        this.ws.onerror = (error) => {
+          this.options.onError?.(error);
+          reject(error);
+        };
+
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Disconnect from the WebSocket server
+   */
+  public disconnect(): void {
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
+
+  /**
+   * Check if the WebSocket is currently connected
+   */
+  public isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+}
+
+
+
+
+
+
