@@ -212,7 +212,7 @@ export async function submitSwap(
       orderHash: request.orderHash,
       signature: request.signature,
     });
-    
+
     const data = response.data;
     return {
       orderHash: data.orderHash,
@@ -326,7 +326,7 @@ export async function queryOrders(
     const response = await axios.get(`${baseUrl}/data/query`, {
       params: params
     });
-    
+
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -342,12 +342,12 @@ export async function queryOrders(
           }
         };
       }
-      
+
       if (error.response?.data) {
         throw new Error(`API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
       }
     }
-    
+
     throw new Error(`Failed to query orders: ${String(error)}`);
   }
 }

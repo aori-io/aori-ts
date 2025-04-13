@@ -1,5 +1,5 @@
-/*//////////////////////////////////////////////////////////////
-                            CHAINS
+////////////////////////////////////////////////////////////////*/
+//                      SUPPORTED CHAINS
 //////////////////////////////////////////////////////////////*/
 
 import { ChainInfo } from ".";
@@ -9,21 +9,21 @@ export const CHAINS_MAP: Record<string, ChainInfo> = {
         chainKey: "ethereum",
         chainId: 1,
         eid: 30101,
-        address: "0x1E9DfF7bA62AE3BA940a95A8C735CaFa7f3e9c36",
+        address: "0xe8820573Bb2d748Dc86C381b2c4bC3cFdFabf30A",
         blocktime: 12,
     },
     "base": {
         chainKey: "base",
         chainId: 8453,
         eid: 30184,
-        address: "0x4F424e1c94F2918251C16bD7C62b82ee16F9fB9D",
+        address: "0x21FC19BE519fB20e9182aDF3Ca0C2Ef625aB1647",
         blocktime: 2,
     },
     "arbitrum": {
         chainKey: "arbitrum",
         chainId: 42161,
         eid: 30110,
-        address: "0x0bA551B46Eb17C3F3113F781e4264032f3287680",
+        address: "0x708a4498dA06b133f73Ee6107F1737015372cb76",
         blocktime: 1,
     },
     "optimism": {
@@ -45,15 +45,15 @@ export function getChainInfoByKey(chainKey: string): ChainInfo | undefined {
     return CHAINS_MAP[chainKey.toLowerCase()];
 }
 
-/*//////////////////////////////////////////////////////////////
-                        WEBSOCKET URLS
+//////////////////////////////////////////////////////////////*/
+//                      WEBSOCKET URLS
 //////////////////////////////////////////////////////////////*/
 
 export const AORI_WS_API: string = "wss://api.aori.io";
 export const AORI_WS_DEVELOPMENT_API: string = "wss://dev.api.aori.io";
 
-/*//////////////////////////////////////////////////////////////
-                        HTTP POST URLS
+//////////////////////////////////////////////////////////////*/
+//                      HTTP POST URLS
 //////////////////////////////////////////////////////////////*/
 
 // Main Aori API for facilitating CRUD operations
