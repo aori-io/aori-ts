@@ -1,6 +1,6 @@
 # Aori TypeScript SDK
 
-![aori-ts banner](https://github.com/aori-io/.github-private/blob/main/assets/public/aori-ts.png)
+![aori-ts banner](https://github.com/aori-io/.github/blob/main/assets/aori-ts.png)
 
 [![https://devs.aori.io](https://img.shields.io/badge/🗨_telegram_chat-0088cc)](https://devs.aori.io) ![GitHub issues](https://img.shields.io/github/issues-raw/aori-io/aori-ts?color=blue)
 
@@ -142,209 +142,27 @@ The data endpoint acts as the primary endpoint for users to query historical ord
 
 ## Chains
 
-| Chain    | chainKey   | chainId | eid | address                                      | blocktime | vm  |
-| -------- | ---------- | ------- | --- | -------------------------------------------- | --------- | --- |
-| Ethereum | `ethereum` | 1       | ??? | ???                                          | ???       | EVM |
-| Base     | `base`     | 8453    | ??? | `0x4F424e1c94F2918251C16bD7C62b82ee16F9fB9D` | ???       | EVM |
-| Arbitrum | `arbitrum` | 42161   | ??? | `0x48051Dfe36367c2BC4DE8de39945C6166F5fa8Ee` | ???       | EVM |
-| Optimism | `optimism` | 10      | ??? | ???                                          | ???       | EVM |
-| Solana   | `solana`   | N/A     | ??? | ???                                          | ???       | SVM |
+| Chain    | chainKey   | chainId | eid   | address                                      | vm  |
+| -------- | ---------- | ------- | ----- | -------------------------------------------- | --- |
+| Ethereum | `ethereum` | 1       | 30101 | `0xe8820573Bb2d748Dc86C381b2c4bC3cFdFabf30A` | EVM |
+| Base     | `base`     | 8453    | 30184 | `0x21FC19BE519fB20e9182aDF3Ca0C2Ef625aB1647` | EVM |
+| Arbitrum | `arbitrum` | 42161   | 30110 | `0x708a4498dA06b133f73Ee6107F1737015372cb76` | EVM |
+| Optimism | `optimism` | 10      | 30111 | `0xbfd66f36aCa484802387a8e484BCe4630A1da764` | EVM |
 
 ## SDK Functions
 
-| Function              | Description                                                   | Parameters                                                                   | Return Type                                       |
-| --------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------- |
-| `getQuote`            | Requests a quote for a token swap                             | `request: QuoteRequest, baseUrl?: string`                                    | `Promise<QuoteResponse>`                          |
-| `signOrder`           | Signs an order using the provided private key                 | `quoteResponse: QuoteResponse, signer: SignerType`                           | `Promise<string>`                                 |
-| `signReadableOrder`   | Signs an order using EIP-712 typed data (for wallet clients)  | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string` | `Promise<{orderHash: string, signature: string}>` |
-| `submitSwap`          | Submits a signed swap order to the Aori API                   | `request: SwapRequest, baseUrl?: string`                                     | `Promise<SwapResponse>`                           |
-| `class AoriWebSocket` | WebSocket client for real-time order updates                  | -                                                                            | -                                                 |
-| `pollOrderStatus`     | Polls the status of an order until completion or timeout      | `orderHash: string, baseUrl?: string, options?: PollOrderStatusOptions`      | `Promise<OrderRecord>`                            |
-| `getChains`           | Fetches the list of supported chains and their configurations  | `baseUrl?: string`                                                           | `Promise<ChainInfo[]>`                            |
+| Function            | Description                                                    | Parameters                                                                   | Return Type                                       |
+| ------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------- |
+| `getQuote`          | Requests a quote for a token swap                              | `request: QuoteRequest,  baseUrl?: string`                                   | `Promise<QuoteResponse>`                          |
+| `signOrder`         | Signs an order using the provided private key                  | `quoteResponse: QuoteResponse, signer: SignerType`                           | `Promise<string>`                                 |
+| `signReadableOrder` | Signs an order using EIP-712 typed data (for frontends)        | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string` | `Promise<{orderHash: string, signature: string}>` |
+| `submitSwap`        | Submits a signed swap order to the Aori API.                   | `request: SwapRequest, baseUrl?: string`                                     | `Promise<SwapResponse>`                           |
+| `getOrderStatus`    | Polls the status of an order until completion or timeout.      | `orderHash: string, baseUrl?: string,`                                       | `Promise<OrderStatus>`                            |
+| `getChains`         | Fetches the list of supported chains and their configurations. | `baseUrl?: string`                                                           | `Promise<ChainInfo[]>`                            |
 
-## Usage Examples
+# Examples
 
-### Requesting a Quote
-
-```typescript
-import { getQuote } from "aori-ts";
-
-const quoteRequest = {
-  offerer: "0x...",
-  recipient: "0x...",
-  inputToken: "0x...",
-  outputToken: "0x...",
-  inputAmount: "1000000000000000000",
-  inputChain: "base",
-  outputChain: "arbitrum",
-};
-
-try {
-  const quote = await getQuote(quoteRequest);
-  console.log("Quote received:", quote);
-  // Quote contains signingHash needed for the next step
-} catch (error) {
-  console.error("Failed to get quote:", error);
-}
-```
-
-### Signing an Order with Private Key
-
-```typescript
-import { signOrder } from "aori-ts";
-
-const signer = {
-  privateKey: "your_private_key_here", // Replace with actual private key
-};
-
-try {
-  const signature = await signOrder(quoteResponse, signer);
-  console.log("Order signed:", signature);
-} catch (error) {
-  console.error("Failed to sign order:", error);
-}
-```
-
-### Signing an Order with a Wallet Client (EIP-712)
-
-```typescript
-import { signReadableOrder } from "aori-ts";
-
-// Create a wrapper for your wallet client (viem, ethers, etc.)
-const walletClientWrapper = {
-  signTypedData: async (params) => {
-    // For viem:
-    return signTypedData(walletClient, {
-      account: params.account,
-      domain: params.domain,
-      types: params.types,
-      primaryType: params.primaryType,
-      message: params.message,
-    });
-
-    // For ethers v6:
-    // return wallet._signTypedData(params.domain, params.types, params.message);
-  },
-};
-
-try {
-  const { orderHash, signature } = await signReadableOrder(
-    quoteResponse,
-    walletClientWrapper,
-    userAddress
-  );
-
-  console.log("Order signed:", signature);
-} catch (error) {
-  console.error("Failed to sign order:", error);
-}
-```
-
-### Submitting a Swap
-
-```typescript
-import { submitSwap } from "aori-ts";
-
-const swapRequest = {
-  orderHash: quote.orderHash, // From the quote response
-  signature: signature, // From the signing step
-};
-
-try {
-  const swapResponse = await submitSwap(swapRequest);
-  console.log("Swap submitted:", swapResponse);
-  // Contains order details including status
-} catch (error) {
-  console.error("Failed to submit swap:", error);
-}
-```
-
-### WebSocket Connection for Real-time Updates
-
-```typescript
-import { AoriWebSocket } from "aori-ts";
-
-const ws = new AoriWebSocket(undefined, {
-  onMessage: (order) => {
-    console.log("New order received:", order);
-    // Handle incoming order data
-  },
-  onConnect: () => {
-    console.log("Successfully connected to Aori WebSocket");
-  },
-  onDisconnect: (event) => {
-    console.log("Disconnected from WebSocket:", event.reason);
-  },
-  onError: (error) => {
-    console.error("WebSocket error:", error);
-  },
-});
-
-// Connect to the WebSocket
-try {
-  await ws.connect();
-
-  // Check connection status
-  if (ws.isConnected()) {
-    console.log("WebSocket is connected");
-  }
-
-  // Disconnect when done
-  // ws.disconnect();
-} catch (error) {
-  console.error("Failed to connect:", error);
-}
-```
-
-### Polling HTTP request for Order Status Updates
-
-```typescript
-import { pollOrderStatus } from "aori-ts";
-
-try {
-  const orderStatus = await pollOrderStatus(orderHash, undefined, {
-    onStatusChange: (status, order) => {
-      console.log(`Status changed to: ${status}`);
-      console.log("Current order state:", order);
-    },
-    onComplete: (order) => {
-      console.log("Order completed!", order);
-    },
-    onError: (error) => {
-      console.error("Polling error:", error);
-    },
-    interval: 1000, // Check every second
-    timeout: 60000, // Stop polling after 1 minute
-  });
-} catch (error) {
-  console.error("Order polling failed:", error);
-}
-```
-
-The `pollOrderStatus` function polls the `/data/status/{orderHash}` endpoint to get real-time updates on the status of an order. It will continue polling until the order reaches a terminal state (completed, failed, or src_failed) or until the timeout is reached.
-
-### Getting Supported Chains
-
-```typescript
-import { getChains } from "aori-ts";
-
-try {
-  const chains = await getChains();
-  console.log("Supported chains:", chains);
-} catch (error) {
-  console.error("Failed to fetch chains:", error);
-}
-
-// Example chain info:
-// {
-//   chainKey: "ethereum",
-//   chainId: 1,
-//   eid: 1,
-//   address: "0x...",
-// }
-```
-
-## Executing an Order with a Wallet in a frontend application
+### Executing an Order with a Wallet in a frontend application
 
 This example demonstrates how to use the SDK with a wallet in a frontend application:
 
@@ -354,7 +172,7 @@ import {
   getQuote,
   signReadableOrder,
   submitSwap,
-  pollOrderStatus,
+  getOrderStatus,
 } from "aori-ts";
 
 // React component example
@@ -367,19 +185,19 @@ function SwapComponent() {
       const quoteRequest = {
         offerer: address,
         recipient: address,
-        inputToken: "0x...", // WETH on Base
-        outputToken: "0x...", // USDC on Arbitrum
-        inputAmount: "1000000000000000000", // 1 ETH
+        inputToken: "0x...",
+        outputToken: "0x...",
+        inputAmount: "1000000000",
         inputChain: "base",
         outputChain: "arbitrum",
       };
 
       const quote = await getQuote(quoteRequest);
 
-      // 2. Get the wallet client
+      // 2. Get the wallet client:
       const walletClient = await connector?.getWalletClient();
 
-      // 3. Create a wrapper for the wallet client
+      // 3. Create a wrapper for the wallet client:
       const walletWrapper = {
         signTypedData: async (params) => {
           return walletClient.signTypedData({
@@ -392,14 +210,14 @@ function SwapComponent() {
         },
       };
 
-      // 4. Sign the order using EIP-712
+      // 4. Sign the order using EIP-712:
       const { orderHash, signature } = await signReadableOrder(
         quote,
         walletWrapper,
         address
       );
 
-      // 5. Submit the swap with signature
+      // 5. Submit the swap with signature:
       const swapRequest = {
         orderHash,
         signature,
@@ -408,21 +226,92 @@ function SwapComponent() {
       const swapResponse = await submitSwap(swapRequest);
       console.log("Swap submitted successfully:", swapResponse);
 
-      // 6. Optional: Poll for status updates
-      pollOrderStatus(swapResponse.orderHash, undefined, {
-        onStatusChange: (status) => {
-          console.log(`Order status: ${status}`);
-        },
-        onComplete: (order) => {
-          console.log("Swap completed!", order);
-        },
-      });
+      // 6. Check current order status:
+      const status = await getOrderStatus(swapResponse.orderHash);
+      console.log(`Current order status: ${status.type}`);
+      // });
     } catch (error) {
       console.error("Swap failed:", error);
     }
   };
 
-  return <button onClick={handleSwap}>Swap Tokens</button>;
+  return <button onClick={handleSwap}> Swap Tokens </button>;
+}
+```
+
+### Polling HTTP request for Order Status Updates using `getOrderStatus`
+
+```typescript
+import { getOrderStatus } from "aori-ts";
+
+async function pollOrderStatus(
+  orderHash: string,
+  baseUrl: string = "https://api.aori.io",
+  options: {
+    onStatusChange?: (status: OrderStatus) => void;
+    onComplete?: (status: OrderStatus) => void;
+    onError?: (error: Error) => void;
+    interval?: number;
+    timeout?: number;
+  } = {}
+): Promise<OrderStatus> {
+  const {
+    onStatusChange,
+    onComplete,
+    onError,
+    interval = 1000,
+    timeout = 60000,
+  } = options;
+
+  let lastType: string | null = null;
+  const startTime = Date.now();
+
+  return new Promise((resolve, reject) => {
+    const checkStatus = async () => {
+      try {
+        // Check if we've exceeded the timeout
+        if (Date.now() - startTime > timeout) {
+          const error = new Error("Order status polling timed out");
+          onError?.(error);
+          reject(error);
+          return;
+        }
+
+        // Fetch the order status
+        const response = await fetch(`${baseUrl}/data/status/${orderHash}`);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Failed to fetch order status: ${errorText}`);
+        }
+
+        const status: OrderStatus = await response.json();
+
+        // Notify if status type has changed
+        if (status.type !== lastType) {
+          lastType = status.type;
+          onStatusChange?.(status);
+        }
+
+        // Check for completed or failed status
+        if (status.type === "Completed" || status.type === "Failed") {
+          onComplete?.(status);
+          resolve(status);
+          return;
+        }
+
+        // Continue polling
+        setTimeout(checkStatus, interval);
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        onError?.(err);
+        reject(err);
+      }
+    };
+
+    // Start polling
+    checkStatus();
+  });
 }
 ```
 
