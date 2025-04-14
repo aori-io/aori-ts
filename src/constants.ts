@@ -45,6 +45,11 @@ export function getChainInfoByKey(chainKey: string): ChainInfo | undefined {
     return CHAINS_MAP[chainKey.toLowerCase()];
 }
 
+// Helper function to get chain info by EID
+export function getChainInfoByEid(eid: number): ChainInfo | undefined {
+    return Object.values(CHAINS_MAP).find(chain => chain.eid === eid);
+}
+
 //////////////////////////////////////////////////////////////*/
 //                      WEBSOCKET URLS
 //////////////////////////////////////////////////////////////*/
