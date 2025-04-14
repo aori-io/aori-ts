@@ -77,8 +77,6 @@ curl -X POST https://v3development.api.aori.io/quote \
   "startTime": "1700000000",
   "endTime": "1700000010",
   "estimatedTime": 3000, // in milliseconds
-  "exclusiveSolver": "0x0000000000000000000000000000000000000000",
-  "exclusiveSolverDuration": 0
 }
 ```
 
