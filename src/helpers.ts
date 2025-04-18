@@ -365,6 +365,41 @@ export async function getOrderDetails(
 }
 
 ////////////////////////////////////////////////////////////////*/
+//                   QUERY ORDERS STREAM
+//////////////////////////////////////////////////////////////*/
+
+export async function queryOrdersStream(
+  params: QueryOrdersParams = {},
+  baseUrl: string = AORI_API,
+) {
+  const queryParams: Record<string, string> = {};
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      queryParams[key] = String(value);
+    }
+  });
+
+  const encodedParams = new URLSearchParams(queryParams).toString();
+
+  const url = `${baseUrl}/data/query${encodedParams ? `?${encodedParams}` : ''}`;
+
+  try {
+    // Make the GET request
+    const response = await axios.get(url);
+
+    // Return the response data
+    return response.data;
+  } catch (error) {
+    // Handle and rethrow errors
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(`Failed to query orders: ${error.response.data}`);
+    }
+    throw new Error(`Failed to query orders: ${error}`);
+  }
+}
+
+////////////////////////////////////////////////////////////////*/
 //                     CONNECT TO WEBSOCKET
 //////////////////////////////////////////////////////////////*/
 
@@ -397,7 +432,7 @@ function objectToQueryParams(params: Record<string, any>): string {
  */
 export async function queryOrders(
   baseUrl: string,
-  params: QueryOrdersParams
+  params: QueryOrdersRequest
 ): Promise<QueryOrdersResponse> {
   try {
     const response = await axios.get(`${baseUrl}/data/query`, {
@@ -412,10 +447,10 @@ export async function queryOrders(
         return {
           orders: [],
           pagination: {
-            currentPage: params.page || 1,
+            current_page: params.page || 1,
             limit: params.limit || 10,
-            totalRecords: 0,
-            totalPages: 0
+            total_records: 0,
+            total_pages: 0
           }
         };
       }
