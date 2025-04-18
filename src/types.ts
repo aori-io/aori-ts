@@ -1,5 +1,5 @@
 //========================================================
-//            Contract Compliant Order Struct 
+//        Contract Compliant Order Struct Interface
 //========================================================
 export interface Order {
     offerer: string;
@@ -16,7 +16,7 @@ export interface Order {
 }
 
 //========================================================
-//            Quote Request and Response Interfaces
+//          Quote Request and Response Interfaces
 //========================================================
 
 export interface QuoteRequest {
@@ -165,7 +165,7 @@ export interface OrderDetails {
 //========================================================
 //            Query Orders Interfaces
 //========================================================
-export interface OrderRecord {
+export interface OrderQueryResult {
     orderHash: string;
     offerer: string;
     recipient: string;
@@ -182,7 +182,6 @@ export interface OrderRecord {
     srcTx: string | null;
     dstTx: string | null;
     timestamp: number;
-    apiKey: string | null;
 }
 
 /**
@@ -194,10 +193,10 @@ export interface QueryOrdersParams {
     offerer?: string;
     recipient?: string;
     inputToken?: string;
-    // inputAmount?: string;
     inputChain?: string;
     outputToken?: string;
-    // outputAmount?: string;
+    minValue?: string; // min value of usd value range
+    maxValue?: string; // max value of usd value range
     outputChain?: string;
     srctx?: string;
     dstTx?: string;
@@ -223,7 +222,7 @@ export interface PaginationMetadata {
  * Corresponds to Rust's QueryOrdersResponse
  */
 export interface QueryOrdersResponse {
-    orders: OrderRecord[];
+    orders: OrderQueryResult[];
     pagination: PaginationMetadata;
 }
 
@@ -232,7 +231,7 @@ export interface QueryOrdersResponse {
 //=============================================
 
 export interface SubscriptionParams {
-    order_hash?: string;
+    orderHash?: string;
     offerer?: string;
     recipient?: string;
     inputToken?: string;
@@ -248,8 +247,8 @@ export interface SubscriptionParams {
     limit?: number; // Number of records per page
 }
 
-export interface EventParams {
-    order_hash?: string;
+export interface Event {
+    orderHash?: string;
     offerer?: string;
     recipient?: string;
     inputToken?: string;
@@ -261,6 +260,4 @@ export interface EventParams {
     status?: string; // Pending, Received, Filled, Confirmed, Failed
     minTime?: number; // Unix timestamp, start of filter range by created_at
     maxTime?: number; // Unix timestamp, end of filter range by created_at
-    page?: number; // Page number (1-based)
-    limit?: number; // Number of records per page
 }
