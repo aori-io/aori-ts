@@ -42,7 +42,7 @@ export interface QuoteResponse {
     outputChain: string;
     startTime: number;
     endTime: number;
-    exclusiveSolverDuration: number;
+    estimatedTime: number;
 }
 
 //========================================================
@@ -136,29 +136,29 @@ export interface OrderFailedStatus {
 //=============================================
 
 export interface OrderEventRecord {
-    order_hash: string;
+    orderHash: string;
     event: string;
     timestamp: number;
 }
 
 export interface OrderRecord {
-    order_hash: string;
+    orderHash: string;
     offerer: string;
     recipient: string;
-    input_token: string;
-    input_amount: string;
-    input_chain: string;
-    input_token_price_usd: string;
-    output_token: string;
-    output_amount: string;
-    output_chain: string;
-    output_token_price_usd: string;
-    start_time: number;
-    end_time: number;
-    src_tx: string | null;
-    dst_tx: string | null;
+    inputToken: string;
+    inputAmount: string;
+    inputChain: string;
+    inputTokenPriceUsd: string;
+    outputToken: string;
+    outputAmount: string;
+    outputChain: string;
+    outputTokenPriceUsd: string;
+    startTime: number;
+    endTime: number;
+    srcTx: string | null;
+    dstTx: string | null;
     timestamp: number;
-    api_key: string | null;
+    apiKey: string | null;
     events: OrderEventRecord[];
 }
 
