@@ -261,3 +261,46 @@ export interface Event {
     minTime?: number; // Unix timestamp, start of filter range by created_at
     maxTime?: number; // Unix timestamp, end of filter range by created_at
 }
+
+//============================================
+//        WebSocket Event Interfaces
+//=============================================
+
+/**
+ * WebSocket event types that correspond to Rust's WSEventType
+ */
+export enum WSEventType {
+    OrderCreated = "OrderCreated", // A new order has been created (SwapRequest)
+    OrderReceived = "OrderReceived", // Tokens have been deposited for an order
+    OrderFilled = "OrderFilled", // An order has been filled
+    OrderFailed = "OrderFailed", // An order has failed
+}
+
+/**
+ * WebSocket order payload that corresponds to Rust's WSOrder
+ */
+export interface WSOrder {
+    orderHash: string;
+    offerer: string;
+    recipient: string;
+    inputToken: string;
+    inputAmount: string;
+    inputChain: string;
+    outputToken: string;
+    outputAmount: string;
+    outputChain: string;
+    startTime: number;
+    endTime: number;
+}
+
+/**
+ * WebSocket event payload that corresponds to Rust's WSEvent
+ */
+export interface WSEvent {
+    /** Type of WebSocket event */
+    eventType: WSEventType;
+    /** Unix timestamp when the event was created */
+    timestamp: number;
+    /** Order record data */
+    order: WSOrder;
+}

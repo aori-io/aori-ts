@@ -1,4 +1,4 @@
-import { SwapRequest, SwapResponse, QuoteRequest, QuoteResponse, ChainInfo, OrderStatus, QueryOrdersParams, QueryOrdersResponse, OrderDetails } from './types';
+import { SwapRequest, SwapResponse, QuoteRequest, QuoteResponse, ChainInfo, OrderStatus, QueryOrdersParams, QueryOrdersResponse, OrderDetails, WSEvent } from './types';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import {
@@ -365,62 +365,8 @@ export async function getOrderDetails(
 }
 
 ////////////////////////////////////////////////////////////////*/
-//                   QUERY ORDERS STREAM
+//                     QUERY ORDERS
 //////////////////////////////////////////////////////////////*/
-
-export async function queryOrdersStream(
-  params: QueryOrdersParams = {},
-  baseUrl: string = AORI_API,
-) {
-  const queryParams: Record<string, string> = {};
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      queryParams[key] = String(value);
-    }
-  });
-
-  const encodedParams = new URLSearchParams(queryParams).toString();
-
-  const url = `${baseUrl}/data/query${encodedParams ? `?${encodedParams}` : ''}`;
-
-  try {
-    // Make the GET request
-    const response = await axios.get(url);
-
-    // Return the response data
-    return response.data;
-  } catch (error) {
-    // Handle and rethrow errors
-    if (axios.isAxiosError(error) && error.response) {
-      throw new Error(`Failed to query orders: ${error.response.data}`);
-    }
-    throw new Error(`Failed to query orders: ${error}`);
-  }
-}
-
-////////////////////////////////////////////////////////////////*/
-//                     CONNECT TO WEBSOCKET
-//////////////////////////////////////////////////////////////*/
-
-/**
- * Converts an object to URL query parameters
- * 
- * @param params - Object containing query parameters
- * @returns URL-encoded query string
- */
-function objectToQueryParams(params: Record<string, any>): string {
-  return Object.entries(params)
-    .filter(([_, value]) => value !== undefined && value !== null) // Filter out undefined/null values
-    .map(([key, value]) => {
-      // Handle dates by converting to timestamps
-      if (value instanceof Date) {
-        return `${encodeURIComponent(key)}=${encodeURIComponent(Math.floor(value.getTime() / 1000))}`;
-      }
-      return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
-    })
-    .join('&');
-}
 
 /**
  * Queries orders with filtering criteria
@@ -468,78 +414,78 @@ export async function queryOrders(
 //                     CONNECT TO WEBSOCKET
 //////////////////////////////////////////////////////////////*/
 
-// export interface WebSocketOptions {
-//   onMessage?: (order: OrderRecord) => void;
-//   onConnect?: () => void;
-//   onDisconnect?: (event: CloseEvent) => void;
-//   onError?: (error: Event) => void;
-// }
+export interface WebSocketOptions {
+  onMessage?: (event: WSEvent) => void;
+  onConnect?: () => void;
+  onDisconnect?: (event: CloseEvent) => void;
+  onError?: (error: Event) => void;
+}
 
-// export class AoriWebSocket {
-//   private ws: WebSocket | null = null;
-//   private options: WebSocketOptions;
-//   private baseUrl: string;
+export class AoriWebSocket {
+  private ws: WebSocket | null = null;
+  private options: WebSocketOptions;
+  private baseUrl: string;
 
-//   constructor(baseUrl: string = AORI_WS_API, options: WebSocketOptions = {}) {
-//     this.baseUrl = baseUrl.replace('http', 'ws');
-//     this.options = options;
-//   }
+  constructor(baseUrl: string = AORI_WS_API, options: WebSocketOptions = {}) {
+    this.baseUrl = baseUrl.replace('http', 'ws');
+    this.options = options;
+  }
 
-//   /**
-//    * Connect to the Aori WebSocket server
-//    * @returns Promise that resolves when connection is established
-//    */
-//   public connect(): Promise<void> {
-//     return new Promise((resolve, reject) => {
-//       try {
-//         this.ws = new WebSocket(`${this.baseUrl}/ws`);
+  /**
+   * Connect to the Aori WebSocket server
+   * @returns Promise that resolves when connection is established
+   */
+  public connect(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        this.ws = new WebSocket(`${this.baseUrl}/ws`);
 
-//         this.ws.onopen = () => {
-//           this.options.onConnect?.();
-//           resolve();
-//         };
+        this.ws.onopen = () => {
+          this.options.onConnect?.();
+          resolve();
+        };
 
-//         this.ws.onmessage = (event) => {
-//           try {
-//             const order: OrderRecord = JSON.parse(event.data);
-//             this.options.onMessage?.(order);
-//           } catch (error) {
-//             console.error('Failed to parse WebSocket message:', error);
-//           }
-//         };
+        this.ws.onmessage = (event) => {
+          try {
+            const wsEvent: WSEvent = JSON.parse(event.data);
+            this.options.onMessage?.(wsEvent);
+          } catch (error) {
+            console.error('Failed to parse WebSocket message:', error);
+          }
+        };
 
-//         this.ws.onclose = (event) => {
-//           this.options.onDisconnect?.(event);
-//         };
+        this.ws.onclose = (event) => {
+          this.options.onDisconnect?.(event);
+        };
 
-//         this.ws.onerror = (error) => {
-//           this.options.onError?.(error);
-//           reject(error);
-//         };
+        this.ws.onerror = (error) => {
+          this.options.onError?.(error);
+          reject(error);
+        };
 
-//       } catch (error) {
-//         reject(error);
-//       }
-//     });
-//   }
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
 
-//   /**
-//    * Disconnect from the WebSocket server
-//    */
-//   public disconnect(): void {
-//     if (this.ws) {
-//       this.ws.close();
-//       this.ws = null;
-//     }
-//   }
+  /**
+   * Disconnect from the WebSocket server
+   */
+  public disconnect(): void {
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
 
-//   /**
-//    * Check if the WebSocket is currently connected
-//    */
-//   public isConnected(): boolean {
-//     return this.ws?.readyState === WebSocket.OPEN;
-//   }
-// }
+  /**
+   * Check if the WebSocket is currently connected
+   */
+  public isConnected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+}
 
 
 
