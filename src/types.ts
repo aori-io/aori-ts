@@ -132,15 +132,39 @@ export interface OrderFailedStatus {
 }
 
 //============================================
-//       Order Details Interfaces
+//         Order Details Interfaces
 //=============================================
 
-export interface OrderEventRecord {
-    orderHash: string;
+export interface OrderEvent {
+    // orderHash: string; // we don't need this here
     event: string;
     timestamp: number;
 }
 
+export interface OrderDetails {
+    orderHash: string;
+    offerer: string;
+    recipient: string;
+    inputToken: string;
+    inputAmount: string;
+    inputChain: string;
+    inputTokenPriceUsd: string;
+    outputToken: string;
+    outputAmount: string;
+    outputChain: string;
+    outputTokenPriceUsd: string;
+    startTime: number;
+    endTime: number;
+    srcTx: string | null;
+    dstTx: string | null;
+    timestamp: number;
+    apiKey: string | null;
+    events: OrderEvent[];
+}
+
+//========================================================
+//            Query Orders Interfaces
+//========================================================
 export interface OrderRecord {
     orderHash: string;
     offerer: string;
@@ -159,51 +183,84 @@ export interface OrderRecord {
     dstTx: string | null;
     timestamp: number;
     apiKey: string | null;
-    events: OrderEventRecord[];
 }
-
-//========================================================
-//            Query Orders Interfaces
-//========================================================
 
 /**
  * Query parameters for filtering orders
  * Corresponds to Rust's QueryOrdersRequest
  */
-export interface QueryOrdersRequest {
+export interface QueryOrdersParams {
+    orderHash?: string;
+    offerer?: string;
+    recipient?: string;
+    inputToken?: string;
+    // inputAmount?: string;
+    inputChain?: string;
+    outputToken?: string;
+    // outputAmount?: string;
+    outputChain?: string;
+    srctx?: string;
+    dstTx?: string;
+    status?: string; // Pending, Received, Filled, Confirmed, Failed
+    minTime?: number; // Unix timestamp, start of filter range by created_at
+    maxTime?: number; // Unix timestamp, end of filter range by created_at
+    page?: number; // Page number (1-based)
+    limit?: number; // Number of records per page
+}
+
+/**
+ * Pagination metadata for query responses
+ */
+export interface PaginationMetadata {
+    currentPage: number;
+    limit: number;
+    totalRecords: number;
+    totalPages: number;
+}
+
+/**
+ * Response from querying orders
+ * Corresponds to Rust's QueryOrdersResponse
+ */
+export interface QueryOrdersResponse {
+    orders: OrderRecord[];
+    pagination: PaginationMetadata;
+}
+
+//============================================
+//         WebSocket Interfaces
+//=============================================
+
+export interface SubscriptionParams {
     order_hash?: string;
     offerer?: string;
     recipient?: string;
-    input_token?: string;
-    input_amount?: string;
-    input_chain?: string;
-    output_token?: string;
-    output_amount?: string;
-    output_chain?: string;
-    src_tx?: string;
-    dst_tx?: string;
+    inputToken?: string;
+    inputChain?: string;
+    outputToken?: string;
+    outputChain?: string;
+    srctx?: string;
+    dstTx?: string;
     status?: string; // Pending, Received, Filled, Confirmed, Failed
-    min_time?: number; // Unix timestamp, start of filter range by created_at
-    max_time?: number; // Unix timestamp, end of filter range by created_at
+    minTime?: number; // Unix timestamp, start of filter range by created_at
+    maxTime?: number; // Unix timestamp, end of filter range by created_at
     page?: number; // Page number (1-based)
     limit?: number; // Number of records per page
-  }
-  
-  /**
-   * Pagination metadata for query responses
-   */
-  export interface PaginationMetadata {
-    current_page: number;
-    limit: number;
-    total_records: number;
-    total_pages: number;
-  }
-  
-  /**
-   * Response from querying orders
-   * Corresponds to Rust's QueryOrdersResponse
-   */
-  export interface QueryOrdersResponse {
-    orders: OrderRecord[];
-    pagination: PaginationMetadata;
-  }
+}
+
+export interface EventParams {
+    order_hash?: string;
+    offerer?: string;
+    recipient?: string;
+    inputToken?: string;
+    inputChain?: string;
+    outputToken?: string;
+    outputChain?: string;
+    srctx?: string;
+    dstTx?: string;
+    status?: string; // Pending, Received, Filled, Confirmed, Failed
+    minTime?: number; // Unix timestamp, start of filter range by created_at
+    maxTime?: number; // Unix timestamp, end of filter range by created_at
+    page?: number; // Page number (1-based)
+    limit?: number; // Number of records per page
+}

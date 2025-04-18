@@ -1,4 +1,4 @@
-import { SwapRequest, SwapResponse, QuoteRequest, QuoteResponse, OrderRecord, ChainInfo, OrderStatus, QueryOrdersRequest, QueryOrdersResponse } from './types';
+import { SwapRequest, SwapResponse, QuoteRequest, QuoteResponse, OrderRecord, ChainInfo, OrderStatus, QueryOrdersParams, QueryOrdersResponse } from './types';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import {
@@ -397,7 +397,7 @@ function objectToQueryParams(params: Record<string, any>): string {
  */
 export async function queryOrders(
   baseUrl: string,
-  params: QueryOrdersRequest
+  params: QueryOrdersParams
 ): Promise<QueryOrdersResponse> {
   try {
     const response = await axios.get(`${baseUrl}/data/query`, {
@@ -412,10 +412,10 @@ export async function queryOrders(
         return {
           orders: [],
           pagination: {
-            current_page: params.page || 1,
+            currentPage: params.page || 1,
             limit: params.limit || 10,
-            total_records: 0,
-            total_pages: 0
+            totalRecords: 0,
+            totalPages: 0
           }
         };
       }
