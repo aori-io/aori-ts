@@ -238,13 +238,7 @@ export interface SubscriptionParams {
     inputChain?: string;
     outputToken?: string;
     outputChain?: string;
-    srctx?: string;
-    dstTx?: string;
     status?: string; // Pending, Received, Filled, Confirmed, Failed
-    minTime?: number; // Unix timestamp, start of filter range by created_at
-    maxTime?: number; // Unix timestamp, end of filter range by created_at
-    page?: number; // Page number (1-based)
-    limit?: number; // Number of records per page
 }
 
 export interface Event {
