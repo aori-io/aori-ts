@@ -87,18 +87,10 @@ export interface ChainInfo {
 //=============================================
 
 export type OrderStatus =
-    | { type: 'Quoted', status: string, orderHash: string, timestamp: number }
     | { type: 'Pending', status: string, orderHash: string, timestamp: number }
     | { type: 'Received', status: string, orderHash: string, txUrl: string, timestamp: number }
     | { type: 'Completed', status: string, orderHash: string, txUrl: string, timestamp: number }
     | { type: 'Failed', status: string, orderHash: string, error: string, timestamp: number };
-
-export interface OrderQuotedStatus {
-    type: 'Quoted';
-    status: string;
-    orderHash: string;
-    timestamp: number;
-}
 
 export interface OrderPendingStatus {
     type: 'Pending';
@@ -165,6 +157,34 @@ export interface OrderDetails {
 //========================================================
 //            Query Orders Interfaces
 //========================================================
+
+
+/**
+ * Query parameters for filtering orders
+ */
+export interface QueryOrdersParams {
+    orderHash?: string;
+    offerer?: string;
+    recipient?: string;
+    inputToken?: string;
+    inputChain?: string;
+    outputToken?: string;
+    minValue?: string; // min value of usd value range
+    maxValue?: string; // max value of usd value range
+    outputChain?: string;
+    srctx?: string;
+    dstTx?: string;
+    status?: string; // Pending, Received, Completed, Failed
+    minTime?: number; // Unix timestamp, start of filter range by created_at
+    maxTime?: number; // Unix timestamp, end of filter range by created_at
+    page?: number; // Page number (1-based)
+    limit?: number; // Number of records per page
+}
+
+
+/**
+ * Single result of querying orders
+ */
 export interface OrderQueryResult {
     orderHash: string;
     offerer: string;
@@ -182,29 +202,7 @@ export interface OrderQueryResult {
     srcTx: string | null;
     dstTx: string | null;
     timestamp: number;
-}
-
-/**
- * Query parameters for filtering orders
- * Corresponds to Rust's QueryOrdersRequest
- */
-export interface QueryOrdersParams {
-    orderHash?: string;
-    offerer?: string;
-    recipient?: string;
-    inputToken?: string;
-    inputChain?: string;
-    outputToken?: string;
-    minValue?: string; // min value of usd value range
-    maxValue?: string; // max value of usd value range
-    outputChain?: string;
-    srctx?: string;
-    dstTx?: string;
-    status?: string; // Pending, Received, Filled, Confirmed, Failed
-    minTime?: number; // Unix timestamp, start of filter range by created_at
-    maxTime?: number; // Unix timestamp, end of filter range by created_at
-    page?: number; // Page number (1-based)
-    limit?: number; // Number of records per page
+    status: string;
 }
 
 /**
@@ -219,7 +217,6 @@ export interface PaginationMetadata {
 
 /**
  * Response from querying orders
- * Corresponds to Rust's QueryOrdersResponse
  */
 export interface QueryOrdersResponse {
     orders: OrderQueryResult[];
@@ -230,6 +227,9 @@ export interface QueryOrdersResponse {
 //         WebSocket Interfaces
 //=============================================
 
+/**
+ * Parameters for filtering WebSocket event subscriptions
+ */
 export interface SubscriptionParams {
     orderHash?: string;
     offerer?: string;
@@ -238,30 +238,11 @@ export interface SubscriptionParams {
     inputChain?: string;
     outputToken?: string;
     outputChain?: string;
-    status?: string; // Pending, Received, Filled, Confirmed, Failed
+    status?: string; // Pending, Received, Completed, Failed
 }
-
-export interface Event {
-    orderHash?: string;
-    offerer?: string;
-    recipient?: string;
-    inputToken?: string;
-    inputChain?: string;
-    outputToken?: string;
-    outputChain?: string;
-    srctx?: string;
-    dstTx?: string;
-    status?: string; // Pending, Received, Filled, Confirmed, Failed
-    minTime?: number; // Unix timestamp, start of filter range by created_at
-    maxTime?: number; // Unix timestamp, end of filter range by created_at
-}
-
-//============================================
-//        WebSocket Event Interfaces
-//=============================================
 
 /**
- * WebSocket event types that correspond to Rust's WSEventType
+ * WebSocket event types 
  */
 export enum WSEventType {
     OrderCreated = "OrderCreated", // A new order has been created (SwapRequest)
@@ -271,7 +252,7 @@ export enum WSEventType {
 }
 
 /**
- * WebSocket order payload that corresponds to Rust's WSOrder
+ * WebSocket order payload
  */
 export interface WSOrder {
     orderHash: string;
@@ -288,7 +269,7 @@ export interface WSOrder {
 }
 
 /**
- * WebSocket event payload that corresponds to Rust's WSEvent
+ * WebSocket event payload
  */
 export interface WSEvent {
     /** Type of WebSocket event */
