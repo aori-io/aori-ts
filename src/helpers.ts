@@ -17,10 +17,19 @@ import {
 * @returns Promise that resolves with an array of chain information
 */
 export async function getChains(
-  baseUrl: string = AORI_API
+  baseUrl: string = AORI_API,
+  apiKey?: string
 ): Promise<ChainInfo[]> {
   try {
-    const response = await axios.get(`${baseUrl}/chains`);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (apiKey) {
+      headers['x-api-key'] = apiKey;
+    }
+    
+    const response = await axios.get(`${baseUrl}/chains`, { headers });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
@@ -36,13 +45,23 @@ export async function getChains(
 
 export async function getQuote(
   request: QuoteRequest,
-  baseUrl: string = AORI_API
+  baseUrl: string = AORI_API,
+  apiKey?: string
 ): Promise<QuoteResponse> {
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (apiKey) {
+      headers['x-api-key'] = apiKey;
+    }
+    
     const response = await axios.post(`${baseUrl}/quote`, {
       ...request,
       inputAmount: request.inputAmount.toString(), // Convert any number type to string
-    });
+    }, { headers });
+    
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
@@ -205,13 +224,22 @@ export async function signReadableOrder(
 
 export async function submitSwap(
   request: SwapRequest,
-  baseUrl: string = AORI_API
+  baseUrl: string = AORI_API,
+  apiKey?: string
 ): Promise<SwapResponse> {
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (apiKey) {
+      headers['x-api-key'] = apiKey;
+    }
+    
     const response = await axios.post(`${baseUrl}/swap`, {
       orderHash: request.orderHash,
       signature: request.signature,
-    });
+    }, { headers });
 
     const data = response.data;
     return {
@@ -245,14 +273,24 @@ export async function submitSwap(
  * Fetches the current status of an order
  * @param orderHash The hash of the order to check
  * @param baseUrl The base URL of the API
+ * @param apiKey Optional API key for authentication
  * @returns A promise that resolves with the order status
  */
 export async function getOrderStatus(
   orderHash: string,
-  baseUrl: string = AORI_API
+  baseUrl: string = AORI_API,
+  apiKey?: string
 ): Promise<OrderStatus> {
   try {
-    const response = await axios.get(`${baseUrl}/data/status/${orderHash}`);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (apiKey) {
+      headers['x-api-key'] = apiKey;
+    }
+    
+    const response = await axios.get(`${baseUrl}/data/status/${orderHash}`, { headers });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
@@ -279,12 +317,14 @@ export interface PollOrderStatusOptions {
  * @param orderHash The hash of the order to poll
  * @param baseUrl The base URL of the API
  * @param options Polling options and callbacks
+ * @param apiKey Optional API key for authentication
  * @returns A promise that resolves with the final order status
  */
 export async function pollOrderStatus(
   orderHash: string,
   baseUrl: string = AORI_API,
-  options: PollOrderStatusOptions = {}
+  options: PollOrderStatusOptions = {},
+  apiKey?: string
 ): Promise<OrderStatus> {
   const {
     onStatusChange,
@@ -308,8 +348,8 @@ export async function pollOrderStatus(
           return;
         }
 
-        // Use the getOrderStatus function
-        const status = await getOrderStatus(orderHash, baseUrl);
+        // Use the getOrderStatus function with apiKey
+        const status = await getOrderStatus(orderHash, baseUrl, apiKey);
 
         // Notify if status has changed
         if (status.type !== lastStatus) {
@@ -347,14 +387,24 @@ export async function pollOrderStatus(
  * Fetches detailed information about an order
  * @param orderHash The hash of the order to get details for
  * @param baseUrl The base URL of the API
+ * @param apiKey Optional API key for authentication
  * @returns A promise that resolves with the order details
  */
 export async function getOrderDetails(
   orderHash: string,
-  baseUrl: string = AORI_API
+  baseUrl: string = AORI_API,
+  apiKey?: string
 ): Promise<OrderDetails> {
   try {
-    const response = await axios.get(`${baseUrl}/data/details/${orderHash}`);
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (apiKey) {
+      headers['x-api-key'] = apiKey;
+    }
+    
+    const response = await axios.get(`${baseUrl}/data/details/${orderHash}`, { headers });
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
@@ -373,16 +423,27 @@ export async function getOrderDetails(
  * 
  * @param baseUrl - The base URL of the API server
  * @param params - Parameters to filter the orders by
+ * @param apiKey - Optional API key for authentication
  * @returns A promise that resolves to the query results
  * @throws Will throw an error if the request fails
  */
 export async function queryOrders(
   baseUrl: string,
-  params: QueryOrdersParams
+  params: QueryOrdersParams,
+  apiKey?: string
 ): Promise<QueryOrdersResponse> {
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    
+    if (apiKey) {
+      headers['x-api-key'] = apiKey;
+    }
+    
     const response = await axios.get(`${baseUrl}/data/query`, {
-      params: params
+      params: params,
+      headers
     });
 
     return response.data;
@@ -425,10 +486,16 @@ export class AoriWebSocket {
   private ws: WebSocket | null = null;
   private options: WebSocketOptions;
   private baseUrl: string;
+  private apiKey?: string;
 
-  constructor(baseUrl: string = AORI_WS_API, options: WebSocketOptions = {}) {
+  constructor(
+    baseUrl: string = AORI_WS_API, 
+    options: WebSocketOptions = {},
+    apiKey?: string
+  ) {
     this.baseUrl = baseUrl.replace('http', 'ws');
     this.options = options;
+    this.apiKey = apiKey;
   }
 
   /**
@@ -438,7 +505,13 @@ export class AoriWebSocket {
   public connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.ws = new WebSocket(`${this.baseUrl}/ws`);
+        // Add API key to URL if provided
+        let wsUrl = `${this.baseUrl}/ws`;
+        if (this.apiKey) {
+          wsUrl += `?key=${this.apiKey}`;
+        }
+        
+        this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
           this.options.onConnect?.();
