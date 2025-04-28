@@ -150,7 +150,6 @@ export interface OrderDetails {
     srcTx: string | null;
     dstTx: string | null;
     timestamp: number;
-    apiKey: string | null;
     events: OrderEvent[];
 }
 
@@ -201,8 +200,8 @@ export interface OrderQueryResult {
     endTime: number;
     srcTx: string | null;
     dstTx: string | null;
-    timestamp: number;
-    status: string;
+    timestamp: number; // timestamp of most recent event   
+    status: string; // Pending, Received, Completed, Failed
 }
 
 /**
