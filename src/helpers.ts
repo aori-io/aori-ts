@@ -493,7 +493,7 @@ export class AoriWebSocket {
     options: WebSocketOptions = {},
     apiKey?: string
   ) {
-    this.baseUrl = baseUrl.replace('http', 'ws');
+    this.baseUrl = baseUrl.replace(/^http/, 'ws');
     this.options = options;
     this.apiKey = apiKey;
   }
@@ -506,7 +506,7 @@ export class AoriWebSocket {
     return new Promise((resolve, reject) => {
       try {
         // Add API key to URL if provided
-        let wsUrl = `${this.baseUrl}/ws`;
+        let wsUrl = this.baseUrl;
         if (this.apiKey) {
           wsUrl += `?key=${this.apiKey}`;
         }
