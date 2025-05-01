@@ -93,32 +93,27 @@ export type OrderStatus =
     | { type: 'Failed', status: string, orderHash: string, error: string, timestamp: number };
 
 export interface OrderPendingStatus {
-    type: 'Pending';
-    status: string;
+    status: "pending";
     orderHash: string;
     timestamp: number;
 }
 
 export interface OrderReceivedStatus {
-    type: 'Received';
-    status: string;
-    orderHash: string;
+    status: "received";
+    txHash: string;
     txUrl: string;
     timestamp: number;
 }
 
 export interface OrderCompletedStatus {
-    type: 'Completed';
-    status: string;
-    orderHash: string;
+    status: "received";
+    txHash: string;
     txUrl: string;
     timestamp: number;
 }
 
 export interface OrderFailedStatus {
-    type: 'Failed';
-    status: string;
-    orderHash: string;
+    status: "failed";
     error: string;
     timestamp: number;
 }
@@ -128,8 +123,8 @@ export interface OrderFailedStatus {
 //=============================================
 
 export interface OrderEvent {
-    // orderHash: string; // we don't need this here
-    event: string;
+    eventType: string;
+    order: Order;
     timestamp: number;
 }
 
