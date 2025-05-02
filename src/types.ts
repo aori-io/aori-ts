@@ -106,7 +106,7 @@ export interface OrderReceivedStatus {
 }
 
 export interface OrderCompletedStatus {
-    status: "received";
+    status: "completed";
     txHash: string;
     txUrl: string;
     timestamp: number;
@@ -124,7 +124,7 @@ export interface OrderFailedStatus {
 
 export interface OrderEvent {
     eventType: string;
-    order: Order;
+    order: Order; // maybe this is being implemented in engine? dont see it right now in response. supposted to be orderHash...
     timestamp: number;
 }
 
@@ -239,10 +239,10 @@ export interface SubscriptionParams {
  * WebSocket event types 
  */
 export enum WSEventType {
-    OrderCreated = "OrderCreated", // A new order has been created (SwapRequest)
-    OrderReceived = "OrderReceived", // Tokens have been deposited for an order
-    OrderFilled = "OrderFilled", // An order has been filled
-    OrderFailed = "OrderFailed", // An order has failed
+    Pending = "Pending",
+    Received = "Received", 
+    Completed = "Completed",
+    Failed = "Failed"
 }
 
 /**
@@ -259,6 +259,8 @@ export interface WSOrder {
     outputAmount: string;
     outputChain: string;
     startTime: number;
+    srcTx: string;
+    dstTx: string;
     endTime: number;
 }
 
