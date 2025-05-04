@@ -123,8 +123,7 @@ export interface OrderFailedStatus {
 //=============================================
 
 export interface OrderEvent {
-    eventType: string;
-    order: Order; // maybe this is being implemented in engine? dont see it right now in response. supposted to be orderHash...
+    eventType: string; // created, received, completed, failed
     timestamp: number;
 }
 
@@ -232,14 +231,14 @@ export interface SubscriptionParams {
     inputChain?: string;
     outputToken?: string;
     outputChain?: string;
-    status?: string; // Pending, Received, Completed, Failed
+    eventType?: string; // created, received, completed, failed
 }
 
 /**
  * WebSocket event types 
  */
 export enum WSEventType {
-    Pending = "pending",
+    Created = "created",
     Received = "received", 
     Completed = "completed",
     Failed = "failed"
