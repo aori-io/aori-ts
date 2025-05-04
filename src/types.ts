@@ -135,11 +135,11 @@ export interface OrderDetails {
     inputToken: string;
     inputAmount: string;
     inputChain: string;
-    inputTokenPriceUsd: string;
+    inputTokenValueUsd: string;
     outputToken: string;
     outputAmount: string;
     outputChain: string;
-    outputTokenPriceUsd: string;
+    outputTokenValueUsd: string;
     startTime: number;
     endTime: number;
     srcTx: string | null;
@@ -186,11 +186,11 @@ export interface OrderQueryResult {
     inputToken: string;
     inputAmount: string;
     inputChain: string;
-    inputTokenPriceUsd: string;
+    inputTokenValueUsd: string;
     outputToken: string;
     outputAmount: string;
     outputChain: string;
-    outputTokenPriceUsd: string;
+    outputTokenValueUsd: string;
     startTime: number;
     endTime: number;
     srcTx: string | null;
@@ -239,10 +239,10 @@ export interface SubscriptionParams {
  * WebSocket event types 
  */
 export enum WSEventType {
-    Pending = "Pending",
-    Received = "Received", 
-    Completed = "Completed",
-    Failed = "Failed"
+    Pending = "pending",
+    Received = "received", 
+    Completed = "completed",
+    Failed = "failed"
 }
 
 /**
