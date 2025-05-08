@@ -9,28 +9,28 @@ export const CHAINS_MAP: Record<string, ChainInfo> = {
         chainKey: "ethereum",
         chainId: 1,
         eid: 30101,
-        address: "0xbCbAE4dB3C0d7D95de39b0C3830208F42987f678",
+        address: "0x4688291F2DfF8aD881598182A9DBC8c1eA4b1130",
         blocktime: 12,
     },
     "base": {
         chainKey: "base",
         chainId: 8453,
         eid: 30184,
-        address: "0x6BAFAA37b51404A833d39385AA11996BeE286DbC",
+        address: "0x3dDB39211742809309BE73f6FE5DB32E180d2fcE",
         blocktime: 2,
     },
     "arbitrum": {
         chainKey: "arbitrum",
         chainId: 42161,
         eid: 30110,
-        address: "0x3dDB39211742809309BE73f6FE5DB32E180d2fcE",
+        address: "0xb959B32fb6F998727A77463042f180E9FDdcf2C6",
         blocktime: 1,
     },
     "optimism": {
         chainKey: "optimism",
         chainId: 10,
         eid: 30111,
-        address: "0x4737914b6fddc8e35B7F72F5D55713C4F9c35c38",
+        address: "0xc2a08C3458304f421C996e7F00a3978607dd3158",
         blocktime: 2,
     }
 };
