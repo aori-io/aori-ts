@@ -87,10 +87,10 @@ export interface ChainInfo {
 //=============================================
 
 export type OrderStatus =
-    | { type: 'Pending', status: string, orderHash: string, timestamp: number }
-    | { type: 'Received', status: string, orderHash: string, txUrl: string, timestamp: number }
-    | { type: 'Completed', status: string, orderHash: string, txUrl: string, timestamp: number }
-    | { type: 'Failed', status: string, orderHash: string, error: string, timestamp: number };
+    | { status: 'pending', timestamp: number }
+    | { status: 'received', txHash: string, txUrl: string, timestamp: number }
+    | { status: 'completed', txHash: string, txUrl: string, timestamp: number }
+    | { status: 'failed', error: string, timestamp: number };
 
 export interface OrderPendingStatus {
     status: "pending";
