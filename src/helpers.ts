@@ -312,6 +312,72 @@ export interface PollOrderStatusOptions {
   timeout?: number;
 }
 
+/**
+ * Polls the order status until it's completed, failed, or times out
+ * @param orderHash The hash of the order to poll
+ * @param baseUrl The base URL of the API
+ * @param options Polling options and callbacks
+ * @param apiKey Optional API key for authentication
+ * @returns A promise that resolves with the final order status
+ */
+export async function pollOrderStatus(
+  orderHash: string,
+  baseUrl: string = AORI_API,
+  options: PollOrderStatusOptions = {},
+  apiKey?: string
+): Promise<OrderStatus> {
+  const {
+    onStatusChange,
+    onComplete,
+    onError,
+    interval = 100,
+    timeout = 60000
+  } = options;
+
+  let lastStatus: string | null = null;
+  const startTime = Date.now();
+
+  return new Promise((resolve, reject) => {
+    const checkStatus = async () => {
+      try {
+        // Check if we've exceeded the timeout
+        if (Date.now() - startTime > timeout) {
+          const error = new Error('Order status polling timed out');
+          onError?.(error);
+          reject(error);
+          return;
+        }
+
+        // Use the getOrderStatus function with apiKey
+        const status = await getOrderStatus(orderHash, baseUrl, apiKey);
+
+        // Notify if status has changed
+        if (status.status !== lastStatus) {
+          lastStatus = status.status;
+          onStatusChange?.(status);
+        }
+
+        // Check for completed or failed status
+        if (status.status === 'completed' || status.status === 'failed') {
+          onComplete?.(status);
+          resolve(status);
+          return;
+        }
+
+        // Continue polling
+        setTimeout(checkStatus, interval);
+
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        onError?.(err);
+        reject(err);
+      }
+    };
+
+    // Start polling
+    checkStatus();
+  });
+}
 
 ////////////////////////////////////////////////////////////////*/
 //                   GET ORDER DETAILS
