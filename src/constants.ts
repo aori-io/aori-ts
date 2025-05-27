@@ -47,16 +47,10 @@ export function getChainInfoByEid(eid: number): ChainInfo | undefined {
 }
 
 //////////////////////////////////////////////////////////////*/
-//                      WEBSOCKET URLS
+//                            URLS
 //////////////////////////////////////////////////////////////*/
 
 export const AORI_WS_API: string = "wss://api.aori.io";
-export const AORI_WS_DEVELOPMENT_API: string = "wss://dev.api.aori.io";
-
-//////////////////////////////////////////////////////////////*/
-//                      HTTP POST URLS
-//////////////////////////////////////////////////////////////*/
-
-// Main Aori API for facilitating CRUD operations
 export const AORI_API: string = "https://api.aori.io";
-export const AORI_DEVELOPMENT_API: string = "https://dev.api.aori.io";
+
+
