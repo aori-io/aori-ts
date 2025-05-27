@@ -79,7 +79,6 @@ export interface ChainInfo {
     chainId: number;
     eid: number;
     address: string;
-    blocktime: number;
 }
 
 //============================================
