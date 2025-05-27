@@ -7,8 +7,6 @@ export interface Order {
     inputToken: string;
     outputToken: string;
     inputAmount: string | number | bigint;
-    inputChain: string;
-    outputChain: string;
     startTime: number;
     endTime: number;
     srcEid: number;
