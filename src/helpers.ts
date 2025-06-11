@@ -198,7 +198,7 @@ export async function signReadableOrder(
   // Create the domain object
   const domain = {
     name: "Aori",
-    version: "1",
+    version: "0.3.0",
     chainId: BigInt(inputChainInfo.chainId),
     verifyingContract: inputChainInfo.address
   };

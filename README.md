@@ -26,7 +26,7 @@ yarn add @aori/aori-ts
 
 #### Authorization
 
-Interacting with the Aori API does not currently require an API key, although it is recommended you visit the [Aori Developer Portal](https://developers.aori.io) to receive an integrator ID to be provided tracking and analytics on your integration.
+Interacting with the Aori API currently requires an API key. Inquire at https://aori.io/contact
 
 When you have your API key, you can include it in any API request by passing it as an additional parameter to any of the SDK functions:
 
@@ -79,10 +79,10 @@ curl -X POST https://v3development.api.aori.io/quote \
 -H "Content-Type: application/json" \
 -H "x-api-key: your_api_key_here" \
 -d '{
-    "offerer": "0x0000000000000000000000000000000000000000",
-    "recipient": "0x0000000000000000000000000000000000000000",
-    "inputToken": "0x4200000000000000000000000000000000000006",
-    "outputToken": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+    "offerer": "0x...",
+    "recipient": "0x...",
+    "inputToken": "0x...",
+    "outputToken": "0x...",
     "inputAmount": "1000000000000000000",
     "inputChain": "base",
     "outputChain": "arbitrum"
@@ -95,17 +95,17 @@ curl -X POST https://v3development.api.aori.io/quote \
 {
   "orderHash": "0x9a3af...",
   "signingHash": "0xas23f...",
-  "offerer": "0x0000000000000000000000000000000000000001",
-  "recipient": "0x0000000000000000000000000000000000000001",
-  "inputToken": "0x0000000000000000000000000000000000000002",
-  "outputToken": "0x0000000000000000000000000000000000000003",
+  "offerer": "0x...",
+  "recipient": "0x...",
+  "inputToken": "0x...",
+  "outputToken": "0x...",
   "inputAmount": "1000000000000000000",
   "outputAmount": "1000000000000000000",
   "inputChain": "base",
   "outputChain": "arbitrum",
   "startTime": "1700000000",
   "endTime": "1700000010",
-  "estimatedTime": 3000, // in milliseconds
+  "estimatedTime": 3000,
 }
 ```
 
@@ -171,10 +171,10 @@ The data endpoint acts as the primary endpoint for users to query historical ord
 
 | Chain    | chainKey   | chainId | eid   | address                                      | vm  |
 | -------- | ---------- | ------- | ----- | -------------------------------------------- | --- |
-| Ethereum | `ethereum` | 1       | 30101 | `0xe8820573Bb2d748Dc86C381b2c4bC3cFdFabf30A` | EVM |
-| Base     | `base`     | 8453    | 30184 | `0x21FC19BE519fB20e9182aDF3Ca0C2Ef625aB1647` | EVM |
-| Arbitrum | `arbitrum` | 42161   | 30110 | `0x708a4498dA06b133f73Ee6107F1737015372cb76` | EVM |
-| Optimism | `optimism` | 10      | 30111 | `0xbfd66f36aCa484802387a8e484BCe4630A1da764` | EVM |
+| Ethereum | `ethereum` | 1       | 30101 | `0x98AD96Ef787ba5180814055039F8E37d98ADea63` | EVM |
+| Base     | `base`     | 8453    | 30184 | `0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8` | EVM |
+| Arbitrum | `arbitrum` | 42161   | 30110 | `0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8` | EVM |
+| Optimism | `optimism` | 10      | 30111 | `0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8` | EVM |
 
 ## SDK Functions
 
