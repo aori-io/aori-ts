@@ -213,10 +213,10 @@ async function executeSwap() {
   
   // Create a quote request
   const quoteRequest = {
-    offerer: '0xYourAddress',
-    recipient: '0xYourAddress',
-    inputToken: '0xInputTokenAddress',
-    outputToken: '0xOutputTokenAddress',
+    offerer: '0x...',
+    recipient: '0x...',
+    inputToken: '0x...',
+    outputToken: '0x...',
     inputAmount: '1000000000000000000', // 1 token with 18 decimals
     inputChain: 'arbitrum',
     outputChain: 'base'
