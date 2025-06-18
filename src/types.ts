@@ -271,3 +271,38 @@ export interface WSEvent {
     /** Order record data */
     order: WSOrder;
 }
+
+/**
+ * Interface for wallet clients that can sign typed data (compatible with viem, ethers, etc.)
+ */
+export interface TypedDataSigner {
+  signTypedData: (params: any) => Promise<string>;
+}
+
+/**
+ * Interface for wallet clients that can sign messages (compatible with viem, ethers, etc.)
+ */
+export interface SignerType {
+    privateKey: string;
+}
+
+/**
+ * Interface for WebSocket options
+ */
+export interface WebSocketOptions {
+    onMessage?: (event: WSEvent) => void;
+    onConnect?: () => void;
+    onDisconnect?: (event: CloseEvent) => void;
+    onError?: (error: Event) => void;
+}
+
+/**
+ * Interface for polling order status options
+ */
+export interface PollOrderStatusOptions {
+    onStatusChange?: (status: OrderStatus) => void;
+    onComplete?: (status: OrderStatus) => void;
+    onError?: (error: Error) => void;
+    interval?: number;
+    timeout?: number;
+}

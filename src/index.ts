@@ -5,4 +5,4 @@ export * from './types';
 export * from './constants';
 
 // Re-export all helper functions and classes
-export * from './helpers';
+export * from './core';
