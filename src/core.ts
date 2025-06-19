@@ -86,83 +86,7 @@ export class Aori {
    * @returns The signature and orderHash
    */
   public async signReadableOrder(quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string) {
-    // Get chain information from the constants
-    const inputChainInfo = this.getChainInfoByKey(quoteResponse.inputChain);
-    const outputChainInfo = this.getChainInfoByKey(quoteResponse.outputChain);
-
-    if (!inputChainInfo) {
-      throw new Error(`Chain information not found for ${quoteResponse.inputChain}`);
-    }
-
-    if (!outputChainInfo) {
-      throw new Error(`Chain information not found for ${quoteResponse.outputChain}`);
-    }
-
-    // Define the types for EIP-712 typed data
-    const types = {
-      EIP712Domain: [
-        { name: "name", type: "string" },
-        { name: "version", type: "string" },
-        { name: "verifyingContract", type: "address" }
-      ],
-      Order: [
-        { name: "inputAmount", type: "uint128" },
-        { name: "outputAmount", type: "uint128" },
-        { name: "inputToken", type: "address" },
-        { name: "outputToken", type: "address" },
-        { name: "startTime", type: "uint32" },
-        { name: "endTime", type: "uint32" },
-        { name: "srcEid", type: "uint32" },
-        { name: "dstEid", type: "uint32" },
-        { name: "offerer", type: "address" },
-        { name: "recipient", type: "address" },
-      ]
-    };
-
-    // Convert numeric startTime/endTime to strings if needed
-    const startTimeStr = typeof quoteResponse.startTime === 'number'
-      ? quoteResponse.startTime.toString()
-      : quoteResponse.startTime;
-
-    const endTimeStr = typeof quoteResponse.endTime === 'number'
-      ? quoteResponse.endTime.toString()
-      : quoteResponse.endTime;
-
-    // Construct the message from the QuoteResponse
-    const message = {
-      offerer: quoteResponse.offerer,
-      recipient: quoteResponse.recipient,
-      inputToken: quoteResponse.inputToken,
-      outputToken: quoteResponse.outputToken,
-      inputAmount: BigInt(quoteResponse.inputAmount),
-      outputAmount: BigInt(quoteResponse.outputAmount),
-      startTime: BigInt(Number(startTimeStr)),
-      endTime: BigInt(Number(endTimeStr)),
-      srcEid: inputChainInfo.eid,
-      dstEid: outputChainInfo.eid,
-    };
-
-    // Create the domain object
-    const domain = {
-      name: "Aori",
-      version: "0.3.0",
-      chainId: BigInt(inputChainInfo.chainId),
-      verifyingContract: inputChainInfo.address
-    };
-
-    // Sign the typed data
-    const signature = await signer.signTypedData({
-      account: userAddress,
-      domain,
-      types,
-      primaryType: "Order",
-      message
-    });
-
-    return {
-      orderHash: quoteResponse.orderHash,
-      signature
-    };
+    return await signReadableOrder(this.chains, quoteResponse, signer, userAddress);
   }
 
   /**
@@ -394,6 +318,94 @@ export async function signOrder(
   return formattedSignature;
 }
 
+//////////////////////////////////////////////////////////////*/
+//                     SIGN READABLE ORDER
+//////////////////////////////////////////////////////////////*/
+
+export async function signReadableOrder(
+  chains: Record<string, ChainInfo>,
+  quoteResponse: QuoteResponse,
+  signer: TypedDataSigner,
+  userAddress: string
+): Promise<{ orderHash: string, signature: string }> {
+  // Get chain information from the constants
+  const inputChainInfo = chains[quoteResponse.inputChain.toLowerCase()];
+  const outputChainInfo = chains[quoteResponse.outputChain.toLowerCase()];
+
+  if (!inputChainInfo) {
+    throw new Error(`Chain information not found for ${quoteResponse.inputChain}`);
+  }
+
+  if (!outputChainInfo) {
+    throw new Error(`Chain information not found for ${quoteResponse.outputChain}`);
+  }
+
+  // Define the types for EIP-712 typed data
+  const types = {
+    EIP712Domain: [
+      { name: "name", type: "string" },
+      { name: "version", type: "string" },
+      { name: "verifyingContract", type: "address" }
+    ],
+    Order: [
+      { name: "inputAmount", type: "uint128" },
+      { name: "outputAmount", type: "uint128" },
+      { name: "inputToken", type: "address" },
+      { name: "outputToken", type: "address" },
+      { name: "startTime", type: "uint32" },
+      { name: "endTime", type: "uint32" },
+      { name: "srcEid", type: "uint32" },
+      { name: "dstEid", type: "uint32" },
+      { name: "offerer", type: "address" },
+      { name: "recipient", type: "address" },
+    ]
+  };
+
+  // Convert numeric startTime/endTime to strings if needed
+  const startTimeStr = typeof quoteResponse.startTime === 'number'
+    ? quoteResponse.startTime.toString()
+    : quoteResponse.startTime;
+
+  const endTimeStr = typeof quoteResponse.endTime === 'number'
+    ? quoteResponse.endTime.toString()
+    : quoteResponse.endTime;
+
+  // Construct the message from the QuoteResponse
+  const message = {
+    offerer: quoteResponse.offerer,
+    recipient: quoteResponse.recipient,
+    inputToken: quoteResponse.inputToken,
+    outputToken: quoteResponse.outputToken,
+    inputAmount: BigInt(quoteResponse.inputAmount),
+    outputAmount: BigInt(quoteResponse.outputAmount),
+    startTime: BigInt(Number(startTimeStr)),
+    endTime: BigInt(Number(endTimeStr)),
+    srcEid: inputChainInfo.eid,
+    dstEid: outputChainInfo.eid,
+  };
+
+  // Create the domain object
+  const domain = {
+    name: "Aori",
+    version: "0.3.0",
+    chainId: BigInt(inputChainInfo.chainId),
+    verifyingContract: inputChainInfo.address
+  };
+
+  // Sign the typed data
+  const signature = await signer.signTypedData({
+    account: userAddress,
+    domain,
+    types,
+    primaryType: "Order",
+    message
+  });
+
+  return {
+    orderHash: quoteResponse.orderHash,
+    signature
+  };
+}
 //////////////////////////////////////////////////////////////*/
 //                     SUBMIT A SWAP
 //////////////////////////////////////////////////////////////*/

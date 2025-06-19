@@ -4,5 +4,3 @@
 
 export const AORI_WS_API: string = "wss://api.aori.io";
 export const AORI_API: string = "https://api.aori.io";
-
-
