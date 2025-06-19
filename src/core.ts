@@ -1,4 +1,4 @@
-import { SwapRequest, SwapResponse, QuoteRequest, QuoteResponse, ChainInfo, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails, WSEvent, SignerType, WebSocketOptions } from './types';
+import { SwapRequest, SwapResponse, QuoteRequest, QuoteResponse, ChainInfo, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails, WSEvent, SignerType, WebSocketOptions, SubscriptionParams } from './types';
 import { ethers } from 'ethers';
 import axios from 'axios';
 import {
@@ -91,18 +91,27 @@ export class Aori {
 
   /**
    * Connect to the Aori WebSocket server
+   * @param filter The filter to subscribe to
    * @returns Promise that resolves when connection is established
    */
-  public connect(): Promise<void> {
+  public connect(filter: SubscriptionParams = {}): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
+        let wsUrl = new URL(this.wsBaseUrl);
+
         // Add API key to URL if provided
-        let wsUrl = this.wsBaseUrl;
         if (this.apiKey) {
-          wsUrl += `?key=${this.apiKey}`;
+          wsUrl.searchParams.append('key', this.apiKey);
         }
 
-        this.ws = new WebSocket(wsUrl);
+        // Add filter to URL if provided
+        for (const [key, value] of Object.entries(filter)) {
+          if (value) {
+            wsUrl.searchParams.append(key, value);
+          }
+        }
+
+        this.ws = new WebSocket(wsUrl.toString());
 
         this.ws.onopen = () => {
           this.wsOptions.onConnect?.();

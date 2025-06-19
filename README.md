@@ -56,8 +56,17 @@ const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKe
   onError: (error) => console.error('WebSocket error:', error)
 });
 
-// Connect to WebSocket
-await aori.connect();
+// Connect to WebSocket with optional filter
+await aori.connect({
+  orderHash: '0x...',        // Filter by specific order hash
+  offerer: '0x...',          // Filter by offerer address
+  recipient: '0x...',        // Filter by recipient address
+  inputToken: '0x...',       // Filter by input token address
+  inputChain: 'arbitrum',    // Filter by input chain
+  outputToken: '0x...',      // Filter by output token address
+  outputChain: 'base',       // Filter by output chain
+  eventType: 'completed'     // Filter by event type (created, received, completed, failed)
+});
 
 // Check connection status
 console.log('Connected:', aori.isConnected());
@@ -250,7 +259,7 @@ const aori = await Aori.create(
 | `pollOrderStatus` | Polls the status of an order until completion or timeout | `orderHash: string, options?: PollOrderStatusOptions` | `Promise<OrderStatus>` |
 | `getOrderDetails` | Fetches detailed information about an order | `orderHash: string` | `Promise<OrderDetails>` |
 | `queryOrders` | Queries orders with filtering criteria | `params: QueryOrdersParams` | `Promise<QueryOrdersResponse>` |
-| `connect` | Connects to the WebSocket server | - | `Promise<void>` |
+| `connect` | Connects to the WebSocket server | `filter?: SubscriptionParams` | `Promise<void>` |
 | `disconnect` | Disconnects from the WebSocket server | - | `void` |
 | `isConnected` | Checks if WebSocket is connected | - | `boolean` |
 | `getChainInfoByKey` | Gets chain info by chain key | `chainKey: string` | `ChainInfo \| undefined` |
@@ -317,8 +326,11 @@ async function executeSwapWithClass() {
   const status = await aori.getOrderStatus(swapResponse.orderHash);
   console.log('Order status:', status);
   
-  // Use WebSocket functionality
-  await aori.connect();
+  // Use WebSocket functionality with filter
+  await aori.connect({
+    orderHash: swapResponse.orderHash, // Only listen to events for this specific order
+    eventType: 'completed' // Only listen to completion events
+  });
   // ... handle WebSocket events ...
   aori.disconnect();
 }
