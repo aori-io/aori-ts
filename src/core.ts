@@ -46,9 +46,9 @@ export class Aori {
    * @param apiKey Optional API key for authentication
    * @returns A promise that resolves with the Aori instance
    */
-  public static async create(baseUrl: string = AORI_API, apiKey?: string) {
-    const chains = await fetchChains(baseUrl, apiKey);
-    return new Aori(chains, baseUrl, apiKey);
+  public static async create(apiBaseUrl: string = AORI_API, wsBaseUrl: string = AORI_WS_API, apiKey?: string, wsOptions: WebSocketOptions = {}) {
+    const chains = await fetchChains(apiBaseUrl, apiKey);
+    return new Aori(chains, apiBaseUrl, wsBaseUrl, apiKey, wsOptions);
   }
 
   /**
