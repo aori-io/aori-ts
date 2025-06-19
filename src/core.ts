@@ -12,10 +12,11 @@ import {
 export class Aori {
   // General
   public chains: Record<string, ChainInfo> = {};
-  public baseUrl: string = AORI_API;
-  public apiKey?: string;
+  public apiBaseUrl: string = AORI_API;
+  private apiKey?: string;
 
   // WebSocket
+  public wsBaseUrl: string = AORI_WS_API;
   private ws: WebSocket | null = null;
   private wsOptions: WebSocketOptions;
 
@@ -27,11 +28,13 @@ export class Aori {
    */
   private constructor(
     chains: Record<string, ChainInfo>,
-    baseUrl: string = AORI_API,
+    apiBaseUrl: string = AORI_API,
+    wsBaseUrl: string = AORI_WS_API,
     apiKey?: string,
     wsOptions: WebSocketOptions = {}
   ) {
-    this.baseUrl = baseUrl;
+    this.apiBaseUrl = apiBaseUrl;
+    this.wsBaseUrl = wsBaseUrl.replace(/^http/, 'ws');
     this.apiKey = apiKey;
     this.chains = chains;
     this.wsOptions = wsOptions;
@@ -170,7 +173,7 @@ export class Aori {
     return new Promise((resolve, reject) => {
       try {
         // Add API key to URL if provided
-        let wsUrl = this.baseUrl;
+        let wsUrl = this.wsBaseUrl;
         if (this.apiKey) {
           wsUrl += `?key=${this.apiKey}`;
         }
@@ -229,7 +232,7 @@ export class Aori {
    * @returns The quote response
    */
   public async getQuote(request: QuoteRequest): Promise<QuoteResponse> {
-    return await getQuote(request, this.baseUrl, this.apiKey);
+    return await getQuote(request, this.apiBaseUrl, this.apiKey);
   }
 
   /**
@@ -248,7 +251,7 @@ export class Aori {
    * @returns The swap response
    */
   public async submitSwap(request: SwapRequest) {
-    return await submitSwap(request, this.baseUrl, this.apiKey);
+    return await submitSwap(request, this.apiBaseUrl, this.apiKey);
   }
 
   /**
@@ -257,7 +260,7 @@ export class Aori {
    * @returns The order status
    */
   public async getOrderStatus(orderHash: string) {
-    return await getOrderStatus(orderHash, this.baseUrl, this.apiKey);
+    return await getOrderStatus(orderHash, this.apiBaseUrl, this.apiKey);
   }
 
   /**
@@ -267,7 +270,7 @@ export class Aori {
    * @returns The final order status
    */
   public async pollOrderStatus(orderHash: string, options: PollOrderStatusOptions = {}) {
-    return await pollOrderStatus(orderHash, this.baseUrl, options, this.apiKey);
+    return await pollOrderStatus(orderHash, this.apiBaseUrl, options, this.apiKey);
   }
 
   /**
@@ -276,7 +279,7 @@ export class Aori {
    * @returns The order details
    */
   public async getOrderDetails(orderHash: string) {
-    return await getOrderDetails(orderHash, this.baseUrl, this.apiKey);
+    return await getOrderDetails(orderHash, this.apiBaseUrl, this.apiKey);
   }
 
   /**
@@ -285,7 +288,7 @@ export class Aori {
    * @returns The query results
    */
   public async queryOrders(params: QueryOrdersParams) {
-    return await queryOrders(this.baseUrl, params, this.apiKey);
+    return await queryOrders(this.apiBaseUrl, params, this.apiKey);
   }
 }
 
