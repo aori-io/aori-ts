@@ -117,7 +117,8 @@ const swap = await submitSwap(swapRequest, 'https://api.aori.io', apiKey);
 | `GET`  | `/chains`                  | Get a list of supported chains   | -                |
 | `POST` | `/quote`                   | Get a quote                      | `<QuoteRequest>` |
 | `POST` | `/swap`                    | Execute Swap                     | `<SwapRequest>`  |
-| `GET`  | `/data`                    | Query Historical Orders Database | -                |
+| `GET`  | `/data/query`              | Query Historical Orders Database | 
+| `GET`  | `/data/details/{orderHash}`| Query Single Orders Database | -                |
 | `GET`  | `/data/status/{orderHash}` | Get Swap Details/Status          | -                |
 | `WS`   | `/stream`                  | Open a Websocket Connection      | -                |
 
