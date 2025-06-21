@@ -231,14 +231,13 @@ export class Aori {
 
 export async function fetchChains(
   baseUrl: string = AORI_API,
-  apiKey?: string
+  apiKey?: string,
+  headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
 ): Promise<Record<string, ChainInfo>> {
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    
-    if (apiKey) {
+    if (apiKey && !headers['x-api-key']) {
       headers['x-api-key'] = apiKey;
     }
     
@@ -263,14 +262,14 @@ export async function fetchChains(
 export async function getQuote(
   request: QuoteRequest,
   baseUrl: string = AORI_API,
-  apiKey?: string
+  apiKey?: string,
+  headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
 ): Promise<QuoteResponse> {
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
     
-    if (apiKey) {
+    if (apiKey && !headers['x-api-key']) {
       headers['x-api-key'] = apiKey;
     }
     
@@ -422,14 +421,13 @@ export async function signReadableOrder(
 export async function submitSwap(
   request: SwapRequest,
   baseUrl: string = AORI_API,
-  apiKey?: string
+  apiKey?: string,
+  headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
 ): Promise<SwapResponse> {
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    
-    if (apiKey) {
+    if (apiKey && !headers['x-api-key']) {
       headers['x-api-key'] = apiKey;
     }
     
@@ -476,14 +474,13 @@ export async function submitSwap(
 export async function getOrderStatus(
   orderHash: string,
   baseUrl: string = AORI_API,
-  apiKey?: string
+  apiKey?: string,
+  headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
 ): Promise<OrderStatus> {
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    
-    if (apiKey) {
+    if (apiKey && !headers['x-api-key']) {
       headers['x-api-key'] = apiKey;
     }
     
@@ -509,7 +506,10 @@ export async function pollOrderStatus(
   orderHash: string,
   baseUrl: string = AORI_API,
   options: PollOrderStatusOptions = {},
-  apiKey?: string
+  apiKey?: string,
+  headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
 ): Promise<OrderStatus> {
   const {
     onStatusChange,
@@ -534,7 +534,7 @@ export async function pollOrderStatus(
         }
 
         // Use the getOrderStatus function with apiKey
-        const status = await getOrderStatus(orderHash, baseUrl, apiKey);
+        const status = await getOrderStatus(orderHash, baseUrl, apiKey, headers);
 
         // Notify if status has changed
         if (status.status !== lastStatus) {
@@ -578,14 +578,13 @@ export async function pollOrderStatus(
 export async function getOrderDetails(
   orderHash: string,
   baseUrl: string = AORI_API,
-  apiKey?: string
+  apiKey?: string,
+  headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
 ): Promise<OrderDetails> {
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    
-    if (apiKey) {
+    if (apiKey && !headers['x-api-key']) {
       headers['x-api-key'] = apiKey;
     }
     
@@ -615,14 +614,13 @@ export async function getOrderDetails(
 export async function queryOrders(
   baseUrl: string,
   params: QueryOrdersParams,
-  apiKey?: string
+  apiKey?: string,
+  headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
 ): Promise<QueryOrdersResponse> {
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    
-    if (apiKey) {
+    if (apiKey && !headers['x-api-key']) {
       headers['x-api-key'] = apiKey;
     }
     
