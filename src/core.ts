@@ -42,8 +42,10 @@ export class Aori {
 
   /**
    * Creates a new Aori instance and fetches up to date chain information and contract deployments
-   * @param baseUrl The base URL of the API
+   * @param apiBaseUrl The base URL of the API
+   * @param wsBaseUrl The base URL of the WebSocket API
    * @param apiKey Optional API key for authentication
+   * @param wsOptions Optional WebSocket options
    * @returns A promise that resolves with the Aori instance
    */
   public static async create(apiBaseUrl: string = AORI_API, wsBaseUrl: string = AORI_WS_API, apiKey?: string, wsOptions: WebSocketOptions = {}) {
