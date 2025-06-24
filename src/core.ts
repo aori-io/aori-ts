@@ -1,4 +1,4 @@
-import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails, WSEvent, SignerType, WebSocketOptions, SubscriptionParams } from './types';
+import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketOptions, SubscriptionParams } from './types';
 import { fetchChains, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder } from './helpers';
 import {
   AORI_API,
@@ -93,7 +93,7 @@ export class Aori {
   public connect(filter: SubscriptionParams = {}): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        let wsUrl = new URL(this.wsBaseUrl);
+        const wsUrl = new URL(this.wsBaseUrl);
 
         // Add API key to URL if provided
         if (this.apiKey) {
