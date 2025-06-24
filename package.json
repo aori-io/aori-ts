@@ -1,6 +1,6 @@
 {
   "name": "@aori/aori-ts",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Aori TypeScript SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

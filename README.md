@@ -2,7 +2,7 @@
 
 ![aori-ts banner](https://github.com/aori-io/.github/blob/main/assets/aori-ts.png)
 
-[![https://devs.aori.io](https://img.shields.io/badge/🗨_telegram_chat-0088cc)](https://devs.aori.io) ![GitHub issues](https://img.shields.io/github/issues-raw/aori-io/aori-ts?color=blue)
+[![https://devs.aori.io](https://img.shields.io/badge/🗨_telegram_chat-0088cc)](https://t.me/+sHy6ym4a1ps2Yjlk) ![GitHub issues](https://img.shields.io/github/issues-raw/aori-io/aori-ts?color=blue)
 
 ## Getting Started
 
@@ -126,18 +126,18 @@ const swap = await submitSwap(swapRequest, 'https://api.aori.io', apiKey);
 
 The swap endpoint acts as the primary endpoint for users to request quotes.
 
-#### Example QuateRequest
+#### Example QuoteRequest
 
 ```bash
 curl -X POST https://v3development.api.aori.io/quote \
 -H "Content-Type: application/json" \
 -H "x-api-key: your_api_key_here" \
 -d '{
-    "offerer": "0x...",
-    "recipient": "0x...",
-    "inputToken": "0x...",
-    "outputToken": "0x...",
-    "inputAmount": "1000000000000000000",
+    "offerer": "0x0000000000000000000000000000000000000001",
+    "recipient": "0x0000000000000000000000000000000000000001",
+    "inputToken": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "outputToken": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    "inputAmount": "100000000",
     "inputChain": "base",
     "outputChain": "arbitrum"
 }'
@@ -147,14 +147,15 @@ curl -X POST https://v3development.api.aori.io/quote \
 
 ```json
 {
-  "orderHash": "0x9a3af...",
-  "signingHash": "0xas23f...",
-  "offerer": "0x...",
-  "recipient": "0x...",
-  "inputToken": "0x...",
-  "outputToken": "0x...",
-  "inputAmount": "1000000000000000000",
-  "outputAmount": "1000000000000000000",
+  "orderHash": "0x...",
+  "signingHash": "0x...",
+  "offerer": "0x0000000000000000000000000000000000000001",
+  "recipient": "0x0000000000000000000000000000000000000001",
+  "inputToken": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "outputToken": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "inputAmount": "100000000",
+  "outputAmount": "100000000",
+  "outputAmount": "99999999",
   "inputChain": "base",
   "outputChain": "arbitrum",
   "startTime": "1700000000",
@@ -180,11 +181,11 @@ curl -X POST https://api.aori.io/swap \
 
 ```json
 {
-  "orderHash": "0x9a3af...",
+  "orderHash": "0x...",
   "offerer": "0x0000000000000000000000000000000000000001",
   "recipient": "0x0000000000000000000000000000000000000001",
-  "inputToken": "0x0000000000000000000000000000000000000002",
-  "outputToken": "0x0000000000000000000000000000000000000003",
+  "inputToken": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "outputToken": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
   "inputAmount": "1000000000000000000",
   "outputAmount": "1000000000000000000",
   "inputChain": "base",
@@ -230,6 +231,43 @@ The data endpoint acts as the primary endpoint for users to query historical ord
 | Arbitrum | `arbitrum` | 42161   | 30110 | `0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8` | EVM |
 | Optimism | `optimism` | 10      | 30111 | `0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8` | EVM |
 
+You can easily fetch complete chain information or just the contract address using these helper functions:
+
+#### Get Complete Chain Information
+
+```typescript
+import { getChain } from '@aori/aori-ts';
+
+// Using chainKey (string)
+const optimismChain = await getChain("optimism");
+console.log(optimismChain); 
+// { chainKey: "optimism", chainId: 10, eid: 30111, address: "0x...", explorerUrl: "..." }
+
+// Using chainId (number)  
+const baseChain = await getChain(8453);
+console.log(baseChain.address); // "0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8"
+
+// With API key
+const ethereumChain = await getChain("ethereum", "https://api.aori.io", apiKey);
+```
+
+#### Get Just the Contract Address
+
+```typescript
+import { getAddress } from '@aori/aori-ts';
+
+// Using chainKey (string)
+const optimismAddress = await getAddress("optimism");
+console.log(optimismAddress); // "0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8"
+
+// Using chainId (number)
+const baseAddress = await getAddress(8453);
+console.log(baseAddress); // "0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8"
+
+// With API key
+const address = await getAddress("ethereum", "https://api.aori.io", apiKey);
+```
+
 ## SDK Reference
 
 ### Aori Class (Stateful Usage)
@@ -263,9 +301,8 @@ const aori = await Aori.create(
 | `connect` | Connects to the WebSocket server | `filter?: SubscriptionParams` | `Promise<void>` |
 | `disconnect` | Disconnects from the WebSocket server | - | `void` |
 | `isConnected` | Checks if WebSocket is connected | - | `boolean` |
-| `getChainInfoByKey` | Gets chain info by chain key | `chainKey: string` | `ChainInfo \| undefined` |
-| `getChainInfoById` | Gets chain info by chain ID | `chainId: number` | `ChainInfo \| undefined` |
-| `getChainInfoByEid` | Gets chain info by EID | `eid: number` | `ChainInfo \| undefined` |
+| `getChain` | Gets chain info by chain identifier | `chain: string \| number` | `ChainInfo \| undefined` |
+| `getChainByEid` | Gets chain info by EID | `eid: number` | `ChainInfo \| undefined` |
 
 ### Standalone Functions (Non-Stateful Usage)
 
@@ -275,13 +312,16 @@ For simple operations without maintaining state, use these standalone functions:
 | -------- | ----------- | ---------- | ----------- |
 | `getQuote` | Requests a quote for a token swap | `request: QuoteRequest, baseUrl?: string, apiKey?: string` | `Promise<QuoteResponse>` |
 | `signOrder` | Signs an order using the provided private key | `quoteResponse: QuoteResponse, signer: SignerType` | `Promise<string>` |
-| `signReadableOrder` | Signs an order using EIP-712 typed data | `chains: Record<string, ChainInfo>, quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string` | `Promise<{orderHash: string, signature: string}>` |
+| `signReadableOrder` | Signs an order using EIP-712 typed data | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string, baseUrl?: string, apiKey?: string, chains?: Record<string, ChainInfo>` | `Promise<{orderHash: string, signature: string}>` |
 | `submitSwap` | Submits a signed swap order to the Aori API | `request: SwapRequest, baseUrl?: string, apiKey?: string` | `Promise<SwapResponse>` |
 | `getOrderStatus` | Gets the current status of an order | `orderHash: string, baseUrl?: string, apiKey?: string` | `Promise<OrderStatus>` |
 | `pollOrderStatus` | Polls the status of an order until completion or timeout | `orderHash: string, baseUrl?: string, options?: PollOrderStatusOptions, apiKey?: string` | `Promise<OrderStatus>` |
 | `getOrderDetails` | Fetches detailed information about an order | `orderHash: string, baseUrl?: string, apiKey?: string` | `Promise<OrderDetails>` |
 | `queryOrders` | Queries orders with filtering criteria | `baseUrl: string, params: QueryOrdersParams, apiKey?: string` | `Promise<QueryOrdersResponse>` |
 | `fetchChains` | Fetches the list of supported chains | `baseUrl?: string, apiKey?: string` | `Promise<Record<string, ChainInfo>>` |
+| `getChain` | Fetches the chain information for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string` | `Promise<ChainInfo>` |
+| `getChainByEid` | Fetches the chain information for a specific EID | `eid: number, baseUrl?: string, apiKey?: string` | `Promise<ChainInfo>` |
+| `getAddress` | Fetches the contract address for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string` | `Promise<string>` |
 
 # Examples
 
@@ -302,13 +342,13 @@ async function executeSwapWithClass() {
   
   // Create a quote request
   const quoteRequest = {
-    offerer: '0x...',
-    recipient: '0x...',
-    inputToken: '0x...',
-    outputToken: '0x...',
-    inputAmount: '1000000000000000000', // 1 token with 18 decimals
-    inputChain: 'arbitrum',
-    outputChain: 'base'
+    offerer: "0x0000000000000000000000000000000000000001",
+    recipient: "0x0000000000000000000000000000000000000001",
+    inputToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    outputToken: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    inputAmount: "100000000",
+    inputChain: "base",
+    outputChain: "arbitrum"
   };
   
   // Get quote using instance method
@@ -360,13 +400,13 @@ async function executeSwap() {
   
   // Create a quote request
   const quoteRequest = {
-    offerer: '0x...',
-    recipient: '0x...',
-    inputToken: '0x...',
-    outputToken: '0x...',
-    inputAmount: '1000000000000000000', // 1 token with 18 decimals
-    inputChain: 'arbitrum',
-    outputChain: 'base'
+    offerer: "0x0000000000000000000000000000000000000001",
+    recipient: "0x0000000000000000000000000000000000000001",
+    inputToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    outputToken: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    inputAmount: "100000000",
+    inputChain: "base",
+    outputChain: "arbitrum"
   };
   
   // Include API key in all requests
@@ -391,7 +431,9 @@ executeSwap().catch(console.error);
 
 ### Executing an Order with a Wallet in a frontend application
 
-This example demonstrates how to use the SDK with a wallet in a frontend application:
+These examples demonstrates how to use the SDK with a wallet in a frontend application:
+
+#### Using a stateful aori instance
 
 ```typescript
 import { useAccount } from "wagmi";
@@ -419,11 +461,11 @@ function SwapComponentWithClass() {
       const quoteRequest = {
         offerer: address,
         recipient: address,
-        inputToken: "0x...",
-        outputToken: "0x...",
-        inputAmount: "1000000000",
+        inputToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        outputToken: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        inputAmount: "100000000",
         inputChain: "base",
-        outputChain: "arbitrum",
+        outputChain: "arbitrum"
       };
 
       const quote = await aori.getQuote(quoteRequest);
@@ -470,8 +512,10 @@ function SwapComponentWithClass() {
 
   return <button onClick={handleSwap}> Swap Tokens </button>;
 }
+```
+#### Using stateless helper functions
 
-// React component example with standalone functions
+```typescript
 function SwapComponentWithFunctions() {
   const { address, connector } = useAccount();
   
@@ -483,11 +527,11 @@ function SwapComponentWithFunctions() {
       const quoteRequest = {
         offerer: address,
         recipient: address,
-        inputToken: "0x...",
-        outputToken: "0x...",
-        inputAmount: "1000000000",
+        inputToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        outputToken: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        inputAmount: "100000000",
         inputChain: "base",
-        outputChain: "arbitrum",
+        outputChain: "arbitrum"
       };
 
       const quote = await getQuote(quoteRequest, "https://api.aori.io", apiKey);
@@ -508,13 +552,13 @@ function SwapComponentWithFunctions() {
         },
       };
 
-      // 4. Sign the order using EIP-712 (need to fetch chains first):
-      const chains = await fetchChains("https://api.aori.io", apiKey);
+      // 4. Sign the order using EIP-712 (chains fetched automatically from quote):
       const { orderHash, signature } = await signReadableOrder(
-        chains,
         quote,
         walletWrapper,
-        address
+        address,
+        "https://api.aori.io",
+        apiKey
       );
 
       // 5. Submit the swap with signature:
@@ -536,6 +580,7 @@ function SwapComponentWithFunctions() {
 
   return <button onClick={handleSwap}> Swap Tokens </button>;
 }
+```
 
 ## License
 
