@@ -2,7 +2,7 @@
 
 ![aori-ts banner](https://github.com/aori-io/.github/blob/main/assets/aori-ts.png)
 
-[![https://devs.aori.io](https://img.shields.io/badge/🗨_telegram_chat-0088cc)](https://devs.aori.io) ![GitHub issues](https://img.shields.io/github/issues-raw/aori-io/aori-ts?color=blue)
+[![https://devs.aori.io](https://img.shields.io/badge/🗨_telegram_chat-0088cc)](https://t.me/+sHy6ym4a1ps2Yjlk) ![GitHub issues](https://img.shields.io/github/issues-raw/aori-io/aori-ts?color=blue)
 
 ## Getting Started
 
@@ -46,15 +46,68 @@ const swap = await submitSwap(swapRequest, 'https://api.aori.io', apiKey);
 You can also use API keys with WebSocket connections:
 
 ```typescript
-import { AoriWebSocket } from '@aori/aori-ts';
+import { Aori } from '@aori/aori-ts';
 
-// Initialize websocket with API key
-const ws = new AoriWebSocket('wss://api.aori.io', {
+// Create an Aori instance with API key
+const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+
+// Connect to WebSocket with optional filter and callbacks
+await aori.connect({
+  orderHash: '0x...',        // Filter by specific order hash
+  offerer: '0x...',          // Filter by offerer address
+  recipient: '0x...',        // Filter by recipient address
+  inputToken: '0x...',       // Filter by input token address
+  inputChain: 'arbitrum',    // Filter by input chain
+  outputToken: '0x...',      // Filter by output token address
+  outputChain: 'base',       // Filter by output chain
+  eventType: 'completed'     // Filter by event type (created, received, completed, failed)
+}, {
   onMessage: (event) => console.log(event),
   onConnect: () => console.log('Connected!'),
-}, apiKey);
+  onDisconnect: (event) => console.log('Disconnected:', event),
+  onError: (error) => console.error('WebSocket error:', error)
+});
 
-await ws.connect();
+// Check connection status
+console.log('Connected:', aori.isConnected());
+
+// Disconnect when done
+aori.disconnect();
+```
+
+## Usage Patterns
+
+The SDK supports two usage patterns:
+
+### 1. Stateful Usage with Aori Class
+
+For applications that need to maintain state (API keys, chain information, WebSocket connections), use the `Aori` class:
+
+```typescript
+import { Aori } from '@aori/aori-ts';
+
+// Create an Aori instance with API key
+const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+
+// Use the instance methods
+const quote = await aori.getQuote(quoteRequest);
+const swap = await aori.submitSwap(swapRequest);
+
+// WebSocket functionality
+await aori.connect();
+aori.disconnect();
+```
+
+### 2. Non-Stateful Usage with Functions
+
+For simple one-off operations, use the standalone functions:
+
+```typescript
+import { getQuote, submitSwap } from '@aori/aori-ts';
+
+// Pass API key and URL to each function
+const quote = await getQuote(quoteRequest, 'https://api.aori.io', apiKey);
+const swap = await submitSwap(swapRequest, 'https://api.aori.io', apiKey);
 ```
 
 ## API Reference
@@ -64,7 +117,8 @@ await ws.connect();
 | `GET`  | `/chains`                  | Get a list of supported chains   | -                |
 | `POST` | `/quote`                   | Get a quote                      | `<QuoteRequest>` |
 | `POST` | `/swap`                    | Execute Swap                     | `<SwapRequest>`  |
-| `GET`  | `/data`                    | Query Historical Orders Database | -                |
+| `GET`  | `/data/query`              | Query Historical Orders Database | 
+| `GET`  | `/data/details/{orderHash}`| Query Single Orders Database | -                |
 | `GET`  | `/data/status/{orderHash}` | Get Swap Details/Status          | -                |
 | `WS`   | `/stream`                  | Open a Websocket Connection      | -                |
 
@@ -72,18 +126,18 @@ await ws.connect();
 
 The swap endpoint acts as the primary endpoint for users to request quotes.
 
-#### Example QuateRequest
+#### Example QuoteRequest
 
 ```bash
 curl -X POST https://v3development.api.aori.io/quote \
 -H "Content-Type: application/json" \
 -H "x-api-key: your_api_key_here" \
 -d '{
-    "offerer": "0x...",
-    "recipient": "0x...",
-    "inputToken": "0x...",
-    "outputToken": "0x...",
-    "inputAmount": "1000000000000000000",
+    "offerer": "0x0000000000000000000000000000000000000001",
+    "recipient": "0x0000000000000000000000000000000000000001",
+    "inputToken": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "outputToken": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    "inputAmount": "100000000",
     "inputChain": "base",
     "outputChain": "arbitrum"
 }'
@@ -93,14 +147,15 @@ curl -X POST https://v3development.api.aori.io/quote \
 
 ```json
 {
-  "orderHash": "0x9a3af...",
-  "signingHash": "0xas23f...",
-  "offerer": "0x...",
-  "recipient": "0x...",
-  "inputToken": "0x...",
-  "outputToken": "0x...",
-  "inputAmount": "1000000000000000000",
-  "outputAmount": "1000000000000000000",
+  "orderHash": "0x...",
+  "signingHash": "0x...",
+  "offerer": "0x0000000000000000000000000000000000000001",
+  "recipient": "0x0000000000000000000000000000000000000001",
+  "inputToken": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "outputToken": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+  "inputAmount": "100000000",
+  "outputAmount": "100000000",
+  "outputAmount": "99999999",
   "inputChain": "base",
   "outputChain": "arbitrum",
   "startTime": "1700000000",
@@ -126,11 +181,11 @@ curl -X POST https://api.aori.io/swap \
 
 ```json
 {
-  "orderHash": "0x9a3af...",
+  "orderHash": "0x...",
   "offerer": "0x0000000000000000000000000000000000000001",
   "recipient": "0x0000000000000000000000000000000000000001",
-  "inputToken": "0x0000000000000000000000000000000000000002",
-  "outputToken": "0x0000000000000000000000000000000000000003",
+  "inputToken": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "outputToken": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
   "inputAmount": "1000000000000000000",
   "outputAmount": "1000000000000000000",
   "inputChain": "base",
@@ -176,25 +231,161 @@ The data endpoint acts as the primary endpoint for users to query historical ord
 | Arbitrum | `arbitrum` | 42161   | 30110 | `0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8` | EVM |
 | Optimism | `optimism` | 10      | 30111 | `0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8` | EVM |
 
-## SDK Functions
+You can easily fetch complete chain information or just the contract address using these helper functions:
 
-| Function            | Description                                                    | Parameters                                                                                  | Return Type                                       |
-| ------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `getQuote`          | Requests a quote for a token swap                              | `request: QuoteRequest, baseUrl?: string, apiKey?: string`                                  | `Promise<QuoteResponse>`                          |
-| `signOrder`         | Signs an order using the provided private key                  | `quoteResponse: QuoteResponse, signer: SignerType`                                          | `Promise<string>`                                 |
-| `signReadableOrder` | Signs an order using EIP-712 typed data (for frontends)        | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string`                | `Promise<{orderHash: string, signature: string}>` |
-| `submitSwap`        | Submits a signed swap order to the Aori API.                   | `request: SwapRequest, baseUrl?: string, apiKey?: string`                                   | `Promise<SwapResponse>`                           |
-| `getOrderStatus`    | Gets the current status of an order.                           | `orderHash: string, baseUrl?: string, apiKey?: string`                                      | `Promise<OrderStatus>`                            |
-| `getChains`         | Fetches the list of supported chains and their configurations. | `baseUrl?: string, apiKey?: string`                                                         | `Promise<ChainInfo[]>`                            |
-| `pollOrderStatus`   | Polls the status of an order until completion or timeout.      | `orderHash: string, baseUrl?: string, options?: PollOrderStatusOptions, apiKey?: string`    | `Promise<OrderStatus>`                            |
-| `getOrderDetails`   | Fetches detailed information about an order.                   | `orderHash: string, baseUrl?: string, apiKey?: string`                                      | `Promise<OrderDetails>`                           |
-| `queryOrders`       | Queries orders with filtering criteria.                        | `baseUrl: string, params: QueryOrdersParams, apiKey?: string`                               | `Promise<QueryOrdersResponse>`                    |
+#### Get Complete Chain Information
+
+```typescript
+import { getChain } from '@aori/aori-ts';
+
+// Using chainKey (string)
+const optimismChain = await getChain("optimism");
+console.log(optimismChain); 
+// { chainKey: "optimism", chainId: 10, eid: 30111, address: "0x...", explorerUrl: "..." }
+
+// Using chainId (number)  
+const baseChain = await getChain(8453);
+console.log(baseChain.address); // "0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8"
+
+// With API key
+const ethereumChain = await getChain("ethereum", "https://api.aori.io", apiKey);
+```
+
+#### Get Just the Contract Address
+
+```typescript
+import { getAddress } from '@aori/aori-ts';
+
+// Using chainKey (string)
+const optimismAddress = await getAddress("optimism");
+console.log(optimismAddress); // "0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8"
+
+// Using chainId (number)
+const baseAddress = await getAddress(8453);
+console.log(baseAddress); // "0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8"
+
+// With API key
+const address = await getAddress("ethereum", "https://api.aori.io", apiKey);
+```
+
+## SDK Reference
+
+### Aori Class (Stateful Usage)
+
+The `Aori` class provides a stateful interface for interacting with the Aori API. It automatically fetches chain information on initialization and maintains API configuration.
+
+#### Constructor and Initialization
+
+```typescript
+// Create an Aori instance with automatic chain fetching
+const aori = await Aori.create(
+  apiBaseUrl?: string,    // Default: 'https://api.aori.io'
+  wsBaseUrl?: string,     // Default: 'wss://api.aori.io'
+  apiKey?: string         // Optional API key
+);
+```
+
+#### Instance Methods
+
+| Method | Description | Parameters | Return Type |
+| ------ | ----------- | ---------- | ----------- |
+| `getQuote` | Requests a quote for a token swap | `request: QuoteRequest` | `Promise<QuoteResponse>` |
+| `signOrder` | Signs an order using the provided private key | `quoteResponse: QuoteResponse, signer: SignerType` | `Promise<string>` |
+| `signReadableOrder` | Signs an order using EIP-712 typed data | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string` | `Promise<{orderHash: string, signature: string}>` |
+| `submitSwap` | Submits a signed swap order to the Aori API | `request: SwapRequest` | `Promise<SwapResponse>` |
+| `getOrderStatus` | Gets the current status of an order | `orderHash: string` | `Promise<OrderStatus>` |
+| `pollOrderStatus` | Polls the status of an order until completion or timeout | `orderHash: string, options?: PollOrderStatusOptions` | `Promise<OrderStatus>` |
+| `getOrderDetails` | Fetches detailed information about an order | `orderHash: string` | `Promise<OrderDetails>` |
+| `queryOrders` | Queries orders with filtering criteria | `params: QueryOrdersParams` | `Promise<QueryOrdersResponse>` |
+| `connect` | Connects to the WebSocket server | `filter?: SubscriptionParams, callbacks?: WebSocketCallbacks` | `Promise<void>` |
+| `disconnect` | Disconnects from the WebSocket server | - | `void` |
+| `isConnected` | Checks if WebSocket is connected | - | `boolean` |
+| `getChain` | Gets chain info by chain identifier | `chain: string \| number` | `ChainInfo \| undefined` |
+| `getChainByEid` | Gets chain info by EID | `eid: number` | `ChainInfo \| undefined` |
+
+### Standalone Functions (Non-Stateful Usage)
+
+For simple operations without maintaining state, use these standalone functions:
+
+| Function | Description | Parameters | Return Type |
+| -------- | ----------- | ---------- | ----------- |
+| `getQuote` | Requests a quote for a token swap | `request: QuoteRequest, baseUrl?: string, apiKey?: string` | `Promise<QuoteResponse>` |
+| `signOrder` | Signs an order using the provided private key | `quoteResponse: QuoteResponse, signer: SignerType` | `Promise<string>` |
+| `signReadableOrder` | Signs an order using EIP-712 typed data | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string, baseUrl?: string, apiKey?: string, chains?: Record<string, ChainInfo>` | `Promise<{orderHash: string, signature: string}>` |
+| `submitSwap` | Submits a signed swap order to the Aori API | `request: SwapRequest, baseUrl?: string, apiKey?: string` | `Promise<SwapResponse>` |
+| `getOrderStatus` | Gets the current status of an order | `orderHash: string, baseUrl?: string, apiKey?: string` | `Promise<OrderStatus>` |
+| `pollOrderStatus` | Polls the status of an order until completion or timeout | `orderHash: string, baseUrl?: string, options?: PollOrderStatusOptions, apiKey?: string` | `Promise<OrderStatus>` |
+| `getOrderDetails` | Fetches detailed information about an order | `orderHash: string, baseUrl?: string, apiKey?: string` | `Promise<OrderDetails>` |
+| `queryOrders` | Queries orders with filtering criteria | `baseUrl: string, params: QueryOrdersParams, apiKey?: string` | `Promise<QueryOrdersResponse>` |
+| `fetchChains` | Fetches the list of supported chains | `baseUrl?: string, apiKey?: string` | `Promise<Record<string, ChainInfo>>` |
+| `getChain` | Fetches the chain information for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string` | `Promise<ChainInfo>` |
+| `getChainByEid` | Fetches the chain information for a specific EID | `eid: number, baseUrl?: string, apiKey?: string` | `Promise<ChainInfo>` |
+| `getAddress` | Fetches the contract address for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string` | `Promise<string>` |
 
 # Examples
 
+### Stateful Usage with Aori Class
+
+This example demonstrates how to use the Aori class for stateful API interactions:
+
+```typescript
+import { Aori } from '@aori/aori-ts';
+
+async function executeSwapWithClass() {
+  // Create Aori instance with API key
+  const aori = await Aori.create(
+    'https://api.aori.io',
+    'wss://api.aori.io',
+    process.env.AORI_API_KEY
+  );
+  
+  // Create a quote request
+  const quoteRequest = {
+    offerer: "0x0000000000000000000000000000000000000001",
+    recipient: "0x0000000000000000000000000000000000000001",
+    inputToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    outputToken: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    inputAmount: "100000000",
+    inputChain: "base",
+    outputChain: "arbitrum"
+  };
+  
+  // Get quote using instance method
+  const quote = await aori.getQuote(quoteRequest);
+  console.log('Quote received:', quote);
+  
+  // ... sign the quote ...
+  
+  // Submit the swap using instance method
+  const swapResponse = await aori.submitSwap({
+    orderHash: quote.orderHash,
+    signature: signature
+  });
+  
+  // Check order status using instance method
+  const status = await aori.getOrderStatus(swapResponse.orderHash);
+  console.log('Order status:', status);
+  
+  // Use WebSocket functionality with filter and callbacks
+  await aori.connect({
+    orderHash: swapResponse.orderHash, // Only listen to events for this specific order
+    eventType: 'completed' // Only listen to completion events
+  }, {
+    onMessage: (event) => console.log('WebSocket event:', event),
+    onConnect: () => console.log('WebSocket connected'),
+    onDisconnect: (event) => console.log('WebSocket disconnected:', event),
+    onError: (error) => console.error('WebSocket error:', error)
+  });
+  // WebSocket events will be handled by the callbacks above
+  aori.disconnect();
+}
+
+executeSwapWithClass().catch(console.error);
+```
+
 ### Using API Keys with Environment Variables
 
-This example demonstrates how to use API keys from environment variables:
+This example demonstrates how to use API keys from environment variables with standalone functions:
 
 ```typescript
 import dotenv from 'dotenv';
@@ -213,13 +404,13 @@ async function executeSwap() {
   
   // Create a quote request
   const quoteRequest = {
-    offerer: '0x...',
-    recipient: '0x...',
-    inputToken: '0x...',
-    outputToken: '0x...',
-    inputAmount: '1000000000000000000', // 1 token with 18 decimals
-    inputChain: 'arbitrum',
-    outputChain: 'base'
+    offerer: "0x0000000000000000000000000000000000000001",
+    recipient: "0x0000000000000000000000000000000000000001",
+    inputToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    outputToken: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    inputAmount: "100000000",
+    inputChain: "base",
+    outputChain: "arbitrum"
   };
   
   // Include API key in all requests
@@ -244,22 +435,94 @@ executeSwap().catch(console.error);
 
 ### Executing an Order with a Wallet in a frontend application
 
-This example demonstrates how to use the SDK with a wallet in a frontend application:
+These examples demonstrates how to use the SDK with a wallet in a frontend application:
+
+#### Using a stateful aori instance
 
 ```typescript
 import { useAccount } from "wagmi";
 import {
+  Aori,
   getQuote,
   signReadableOrder,
   submitSwap,
   getOrderStatus,
 } from "aori-ts";
 
-// React component example
-function SwapComponent() {
+// React component example with Aori class
+function SwapComponentWithClass() {
   const { address, connector } = useAccount();
   
   // Get API key from environment variables or a secured source
+  const apiKey = process.env.REACT_APP_AORI_API_KEY;
+
+  const handleSwap = async () => {
+    try {
+      // Create Aori instance
+      const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+
+      // 1. Get the quote first
+      const quoteRequest = {
+        offerer: address,
+        recipient: address,
+        inputToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        outputToken: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        inputAmount: "100000000",
+        inputChain: "base",
+        outputChain: "arbitrum"
+      };
+
+      const quote = await aori.getQuote(quoteRequest);
+
+      // 2. Get the wallet client:
+      const walletClient = await connector?.getWalletClient();
+
+      // 3. Create a wrapper for the wallet client:
+      const walletWrapper = {
+        signTypedData: async (params) => {
+          return walletClient.signTypedData({
+            account: params.account,
+            domain: params.domain,
+            types: params.types,
+            primaryType: params.primaryType,
+            message: params.message,
+          });
+        },
+      };
+
+      // 4. Sign the order using EIP-712:
+      const { orderHash, signature } = await aori.signReadableOrder(
+        quote,
+        walletWrapper,
+        address
+      );
+
+      // 5. Submit the swap with signature:
+      const swapRequest = {
+        orderHash,
+        signature,
+      };
+
+      const swapResponse = await aori.submitSwap(swapRequest);
+      console.log("Swap submitted successfully:", swapResponse);
+
+      // 6. Check current order status:
+      const status = await aori.getOrderStatus(swapResponse.orderHash);
+      console.log(`Current order status: ${status.type}`);
+    } catch (error) {
+      console.error("Swap failed:", error);
+    }
+  };
+
+  return <button onClick={handleSwap}> Swap Tokens </button>;
+}
+```
+#### Using stateless helper functions
+
+```typescript
+function SwapComponentWithFunctions() {
+  const { address, connector } = useAccount();
+  
   const apiKey = process.env.REACT_APP_AORI_API_KEY;
 
   const handleSwap = async () => {
@@ -268,11 +531,11 @@ function SwapComponent() {
       const quoteRequest = {
         offerer: address,
         recipient: address,
-        inputToken: "0x...",
-        outputToken: "0x...",
-        inputAmount: "1000000000",
+        inputToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        outputToken: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+        inputAmount: "100000000",
         inputChain: "base",
-        outputChain: "arbitrum",
+        outputChain: "arbitrum"
       };
 
       const quote = await getQuote(quoteRequest, "https://api.aori.io", apiKey);
@@ -293,14 +556,16 @@ function SwapComponent() {
         },
       };
 
-      // 4. Sign the order using EIP-712:
+      // 4. Sign the order using EIP-712 (chains fetched automatically from quote):
       const { orderHash, signature } = await signReadableOrder(
         quote,
         walletWrapper,
-        address
+        address,
+        "https://api.aori.io",
+        apiKey
       );
 
-      // 5. Submit the swap with signature (including API key):
+      // 5. Submit the swap with signature:
       const swapRequest = {
         orderHash,
         signature,
@@ -309,10 +574,9 @@ function SwapComponent() {
       const swapResponse = await submitSwap(swapRequest, "https://api.aori.io", apiKey);
       console.log("Swap submitted successfully:", swapResponse);
 
-      // 6. Check current order status (including API key):
+      // 6. Check current order status:
       const status = await getOrderStatus(swapResponse.orderHash, "https://api.aori.io", apiKey);
       console.log(`Current order status: ${status.type}`);
-      // });
     } catch (error) {
       console.error("Swap failed:", error);
     }
@@ -320,6 +584,7 @@ function SwapComponent() {
 
   return <button onClick={handleSwap}> Swap Tokens </button>;
 }
+```
 
 ## License
 

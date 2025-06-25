@@ -1,62 +1,60 @@
 {
   "name": "@aori/aori-ts",
   "version": "0.3.0",
-  "description": "Aori TypeScript SDK",
+  "description": "TypeScript SDK for Aori",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist",
+    "dist/**/*",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist",
-    "prepare": "npm run clean && npm run build",
+    "test": "jest",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
     "prepublishOnly": "npm run build",
-    "test": "echo \"No tests specified\"",
-    "lint": "echo \"No linting configured\"",
-    "version:patch": "npm version patch",
-    "version:minor": "npm version minor",
-    "version:major": "npm version major",
-    "prerelease": "npm version prerelease --preid=beta",
-    "release": "npm publish",
-    "version:custom": "node scripts/version.js",
-    "postversion": "git push && git push --tags"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/aori-io/aori-ts.git"
+    "release:dry": "semantic-release --dry-run",
+    "release:manual": "semantic-release --no-ci"
   },
   "keywords": [
     "aori",
-    "ethereum",
-    "web3",
-    "sdk",
-    "trading"
+    "defi",
+    "swap",
+    "typescript",
+    "sdk"
   ],
   "author": "Aori",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/aori-io/aori-ts/issues"
-  },
-  "homepage": "https://github.com/aori-io/aori-ts#readme",
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/ws": "^8.5.10",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.7.3"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aori-io/aori-ts.git"
   },
   "dependencies": {
-    "axios": "^1.7.9",
-    "dotenv": "^16.4.7",
-    "ethers": "^6.13.5",
-    "ws": "^8.18.0"
+    "axios": "^1.6.0",
+    "ethers": "^6.8.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@semantic-release/changelog": "^6.0.0",
+    "@semantic-release/git": "^10.0.0",
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "nock": "^13.0.0",
+    "semantic-release": "^21.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.0.0"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   }
 }
