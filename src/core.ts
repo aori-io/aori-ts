@@ -1,4 +1,4 @@
-import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketOptions, SubscriptionParams } from './types';
+import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketCallbacks, SubscriptionParams } from './types';
 import { fetchChains, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder } from './helpers';
 import {
   AORI_API,
@@ -17,7 +17,6 @@ export class Aori {
   // WebSocket
   public wsBaseUrl: string = AORI_WS_API;
   private ws: WebSocket | null = null;
-  private wsOptions: WebSocketOptions;
 
   /**
    * Creates a new Aori instance
@@ -29,14 +28,12 @@ export class Aori {
     chains: Record<string, ChainInfo>,
     apiBaseUrl: string = AORI_API,
     wsBaseUrl: string = AORI_WS_API,
-    apiKey?: string,
-    wsOptions: WebSocketOptions = {}
+    apiKey?: string
   ) {
     this.apiBaseUrl = apiBaseUrl;
     this.wsBaseUrl = wsBaseUrl.replace(/^http/, 'ws');
     this.apiKey = apiKey;
     this.chains = chains;
-    this.wsOptions = wsOptions;
   }
 
   /**
@@ -47,9 +44,9 @@ export class Aori {
    * @param wsOptions Optional WebSocket options
    * @returns A promise that resolves with the Aori instance
    */
-  public static async create(apiBaseUrl: string = AORI_API, wsBaseUrl: string = AORI_WS_API, apiKey?: string, wsOptions: WebSocketOptions = {}) {
+  public static async create(apiBaseUrl: string = AORI_API, wsBaseUrl: string = AORI_WS_API, apiKey?: string) {
     const chains = await fetchChains(apiBaseUrl, apiKey);
-    return new Aori(chains, apiBaseUrl, wsBaseUrl, apiKey, wsOptions);
+    return new Aori(chains, apiBaseUrl, wsBaseUrl, apiKey);
   }
 
   /**
@@ -90,7 +87,7 @@ export class Aori {
    * @param filter The filter to subscribe to
    * @returns Promise that resolves when connection is established
    */
-  public connect(filter: SubscriptionParams = {}): Promise<void> {
+  public connect(filter: SubscriptionParams = {}, callbacks: WebSocketCallbacks = {}): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         const wsUrl = new URL(this.wsBaseUrl);
@@ -110,25 +107,25 @@ export class Aori {
         this.ws = new WebSocket(wsUrl.toString());
 
         this.ws.onopen = () => {
-          this.wsOptions.onConnect?.();
+          callbacks.onConnect?.();
           resolve();
         };
 
         this.ws.onmessage = (event) => {
           try {
             const wsEvent: WSEvent = JSON.parse(event.data);
-            this.wsOptions.onMessage?.(wsEvent);
+            callbacks.onMessage?.(wsEvent);
           } catch (error) {
             console.error('Failed to parse WebSocket message:', error);
           }
         };
 
         this.ws.onclose = (event) => {
-          this.wsOptions.onDisconnect?.(event);
+          callbacks.onDisconnect?.(event);
         };
 
         this.ws.onerror = (error) => {
-          this.wsOptions.onError?.(error);
+          callbacks.onError?.(error);
           reject(error);
         };
 

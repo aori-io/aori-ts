@@ -48,15 +48,10 @@ You can also use API keys with WebSocket connections:
 ```typescript
 import { Aori } from '@aori/aori-ts';
 
-// Create an Aori instance with API key and WebSocket options
-const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey, {
-  onMessage: (event) => console.log(event),
-  onConnect: () => console.log('Connected!'),
-  onDisconnect: (event) => console.log('Disconnected:', event),
-  onError: (error) => console.error('WebSocket error:', error)
-});
+// Create an Aori instance with API key
+const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
 
-// Connect to WebSocket with optional filter
+// Connect to WebSocket with optional filter and callbacks
 await aori.connect({
   orderHash: '0x...',        // Filter by specific order hash
   offerer: '0x...',          // Filter by offerer address
@@ -66,6 +61,11 @@ await aori.connect({
   outputToken: '0x...',      // Filter by output token address
   outputChain: 'base',       // Filter by output chain
   eventType: 'completed'     // Filter by event type (created, received, completed, failed)
+}, {
+  onMessage: (event) => console.log(event),
+  onConnect: () => console.log('Connected!'),
+  onDisconnect: (event) => console.log('Disconnected:', event),
+  onError: (error) => console.error('WebSocket error:', error)
 });
 
 // Check connection status
@@ -281,8 +281,7 @@ The `Aori` class provides a stateful interface for interacting with the Aori API
 const aori = await Aori.create(
   apiBaseUrl?: string,    // Default: 'https://api.aori.io'
   wsBaseUrl?: string,     // Default: 'wss://api.aori.io'
-  apiKey?: string,        // Optional API key
-  wsOptions?: WebSocketOptions // Optional WebSocket configuration
+  apiKey?: string         // Optional API key
 );
 ```
 
@@ -298,7 +297,7 @@ const aori = await Aori.create(
 | `pollOrderStatus` | Polls the status of an order until completion or timeout | `orderHash: string, options?: PollOrderStatusOptions` | `Promise<OrderStatus>` |
 | `getOrderDetails` | Fetches detailed information about an order | `orderHash: string` | `Promise<OrderDetails>` |
 | `queryOrders` | Queries orders with filtering criteria | `params: QueryOrdersParams` | `Promise<QueryOrdersResponse>` |
-| `connect` | Connects to the WebSocket server | `filter?: SubscriptionParams` | `Promise<void>` |
+| `connect` | Connects to the WebSocket server | `filter?: SubscriptionParams, callbacks?: WebSocketCallbacks` | `Promise<void>` |
 | `disconnect` | Disconnects from the WebSocket server | - | `void` |
 | `isConnected` | Checks if WebSocket is connected | - | `boolean` |
 | `getChain` | Gets chain info by chain identifier | `chain: string \| number` | `ChainInfo \| undefined` |
@@ -367,12 +366,17 @@ async function executeSwapWithClass() {
   const status = await aori.getOrderStatus(swapResponse.orderHash);
   console.log('Order status:', status);
   
-  // Use WebSocket functionality with filter
+  // Use WebSocket functionality with filter and callbacks
   await aori.connect({
     orderHash: swapResponse.orderHash, // Only listen to events for this specific order
     eventType: 'completed' // Only listen to completion events
+  }, {
+    onMessage: (event) => console.log('WebSocket event:', event),
+    onConnect: () => console.log('WebSocket connected'),
+    onDisconnect: (event) => console.log('WebSocket disconnected:', event),
+    onError: (error) => console.error('WebSocket error:', error)
   });
-  // ... handle WebSocket events ...
+  // WebSocket events will be handled by the callbacks above
   aori.disconnect();
 }
 

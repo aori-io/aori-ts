@@ -289,7 +289,7 @@ export interface SignerType {
 /**
  * Interface for WebSocket options
  */
-export interface WebSocketOptions {
+export interface WebSocketCallbacks {
     onMessage?: (event: WSEvent) => void;
     onConnect?: () => void;
     onDisconnect?: (event: CloseEvent) => void;
