@@ -170,6 +170,20 @@ describe('Aori Class', () => {
 
     beforeEach(async () => {
       aori = await Aori.create();
+      // Mock WebSocket global for tests
+      global.WebSocket = jest.fn().mockImplementation(() => ({
+        readyState: 1, // WebSocket.OPEN
+        close: jest.fn(),
+        send: jest.fn()
+      })) as any;
+      // Define WebSocket constants
+      (global.WebSocket as any).OPEN = 1;
+      (global.WebSocket as any).CLOSED = 3;
+    });
+
+    afterEach(() => {
+      // Clean up global mock
+      delete (global as any).WebSocket;
     });
 
     it('should check connection status correctly', () => {
