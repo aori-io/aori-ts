@@ -1,0 +1,37 @@
+# Test files and configs
+tests/
+jest.config.js
+.github/
+.eslintrc.*
+tsconfig.test.json
+
+# Development files
+src/
+*.test.ts
+*.spec.ts
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+*.log
+
+# CI/Coverage files
+coverage/
+.nyc_output/
+
+# Git files
+.git/
+.gitignore
+
+# Documentation and examples
+docs/
+examples/
+
+# Node modules
+node_modules/
+
+# Misc
+*.tgz
+.env
+.env.* 
