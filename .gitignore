@@ -8,4 +8,3 @@
 .env.production.local
 /node_modules
 /dist
-/coverage
