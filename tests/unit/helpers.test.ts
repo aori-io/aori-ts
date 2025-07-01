@@ -1,10 +1,8 @@
-import axios from 'axios';
+import { http, HttpResponse } from 'msw'
+import { setupServer } from 'msw/node'
 import { getChain, getAddress, fetchChains } from '../../src/helpers';
 import { ChainInfo } from '../../src/types';
 
-// Mock axios
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('Chain Helper Functions', () => {
   const mockChains: ChainInfo[] = [
@@ -28,20 +26,21 @@ describe('Chain Helper Functions', () => {
     }
   ];
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  const handlers = [
+    http.get('https://api.aori.io/chains', () => {
+      return HttpResponse.json(mockChains)
+    }),
+  ]
+  const server = setupServer(...handlers)
+
+  beforeAll(() => server.listen())
+  afterEach(() => server.resetHandlers())
+  afterAll(() => server.close())
 
   describe('fetchChains', () => {
     it('should fetch and format chains correctly', async () => {
-      mockedAxios.get.mockResolvedValue({ data: mockChains });
 
       const result = await fetchChains();
-
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        'https://api.aori.io/chains',
-        { headers: { 'Content-Type': 'application/json' } }
-      );
 
       expect(result).toEqual({
         base: mockChains[0],
@@ -51,33 +50,27 @@ describe('Chain Helper Functions', () => {
     });
 
     it('should include API key in headers when provided', async () => {
-      mockedAxios.get.mockResolvedValue({ data: mockChains });
+      const apiKey = 'test-api-key';
+      let xApiKeyHeader;
 
+      server.use(
+        http.get('https://api.aori.io/chains', (req) => {
+          xApiKeyHeader = req.request.headers.get('x-api-key');
+          return HttpResponse.json(mockChains)
+        })
+      )
       await fetchChains('https://api.aori.io', 'test-api-key');
-
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        'https://api.aori.io/chains',
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': 'test-api-key'
-          }
-        }
-      );
+      expect(xApiKeyHeader).toBe(apiKey);
     });
 
     it('should handle API errors gracefully', async () => {
-      mockedAxios.get.mockRejectedValue(new Error('Network error'));
-
+      const fetchSpy = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
       await expect(fetchChains()).rejects.toThrow('Failed to fetch chains: Error: Network error');
+      fetchSpy.mockRestore();
     });
   });
 
   describe('getChain', () => {
-    beforeEach(() => {
-      mockedAxios.get.mockResolvedValue({ data: mockChains });
-    });
-
     it('should fetch chain by string identifier (chainKey)', async () => {
       const result = await getChain('base');
 
@@ -115,9 +108,6 @@ describe('Chain Helper Functions', () => {
   });
 
   describe('getAddress', () => {
-    beforeEach(() => {
-      mockedAxios.get.mockResolvedValue({ data: mockChains });
-    });
 
     it('should return just the address for a given chain', async () => {
       const result = await getAddress('base');

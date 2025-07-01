@@ -1,10 +1,8 @@
-import axios from 'axios';
+import { http, HttpResponse, ws } from 'msw'
+import { setupServer } from 'msw/node'
 import { Aori } from '../../src/core';
 import { ChainInfo } from '../../src/types';
 
-// Mock axios
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('Aori Class', () => {
   const mockChains: ChainInfo[] = [
@@ -22,19 +20,20 @@ describe('Aori Class', () => {
     }
   ];
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockedAxios.get.mockResolvedValue({ data: mockChains });
-  });
+  const handlers = [
+    http.get('https://api.aori.io/chains', () => {
+      return HttpResponse.json(mockChains)
+    }),
+  ]
+  const server = setupServer(...handlers)
+
+  beforeAll(() => server.listen())
+  afterEach(() => server.resetHandlers())
+  afterAll(() => server.close())
 
   describe('Aori.create', () => {
     it('should create Aori instance and fetch chains', async () => {
       const aori = await Aori.create();
-
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        'https://api.aori.io/chains',
-        { headers: { 'Content-Type': 'application/json' } }
-      );
 
       expect(aori.chains).toEqual({
         base: mockChains[0],
@@ -47,18 +46,13 @@ describe('Aori Class', () => {
       const customWsUrl = 'https://custom-ws.example.com';
       const apiKey = 'test-api-key';
 
+      server.use(
+        http.get('https://custom-api.example.com/chains', () => {
+          return HttpResponse.json(mockChains)
+        })
+      )
+
       const aori = await Aori.create(customBaseUrl, customWsUrl, apiKey);
-
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        `${customBaseUrl}/chains`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey
-          }
-        }
-      );
-
       expect(aori.apiBaseUrl).toBe(customBaseUrl);
       expect(aori.wsBaseUrl).toBe('wss://custom-ws.example.com');
     });
@@ -140,7 +134,13 @@ describe('Aori Class', () => {
         estimatedTime: 60
       };
 
-      mockedAxios.post.mockResolvedValue({ data: mockQuoteResponse });
+      let body;
+      server.use(
+        http.post('https://api.aori.io/quote', async (req) => {
+          body = await req.request.json();
+          return HttpResponse.json(mockQuoteResponse)
+        })
+      )
 
       const quoteRequest = {
         offerer: '0x123',
@@ -154,11 +154,7 @@ describe('Aori Class', () => {
 
       const result = await aori.getQuote(quoteRequest);
 
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        'https://api.aori.io/quote',
-        quoteRequest,
-        { headers: { 'Content-Type': 'application/json' } }
-      );
+      expect(body).toMatchObject(quoteRequest);
 
       expect(result).toEqual(mockQuoteResponse);
       expect(result.orderHash).toBeValidOrderHash();

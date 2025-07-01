@@ -1,5 +1,4 @@
 import { ethers } from 'ethers';
-import axios from 'axios';
 import { AORI_API } from './constants';
 import { ChainInfo, QuoteRequest, QuoteResponse, SignerType, SwapRequest, SwapResponse, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails } from './types';
 
@@ -10,16 +9,17 @@ import { ChainInfo, QuoteRequest, QuoteResponse, SignerType, SwapRequest, SwapRe
 export async function fetchChains(
     baseUrl: string = AORI_API,
     apiKey?: string,
-    headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    }
+   { signal }: { signal?: AbortSignal } = {},
   ): Promise<Record<string, ChainInfo>> {
-    try {
-      if (apiKey && !headers['x-api-key']) {
-        headers['x-api-key'] = apiKey;
-      }
-      
-      const response = await axios.get(`${baseUrl}/chains`, { headers });
+  try {
+
+    const response = await http({
+      method: 'GET',
+      url: new URL('chains', baseUrl),
+      headers: buildHeaders(apiKey),
+      signal,
+    })
+
       // Convert array to object with chainKey as key
       const chainsArray = response.data;
       const chainsObject: Record<string, ChainInfo> = {};
@@ -29,10 +29,7 @@ export async function fetchChains(
       }
       
       return chainsObject;
-    } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(`Failed to fetch chains: ${error.response.data}`);
-      }
+  } catch (error) {
       throw new Error(`Failed to fetch chains: ${error}`);
     }
   }
@@ -48,16 +45,16 @@ export async function fetchChains(
     chain: string | number,
     baseUrl: string = AORI_API,
     apiKey?: string,
-    headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    }
+    { signal }: { signal?: AbortSignal } = {},
   ): Promise<ChainInfo> {
     try {
-      if (apiKey && !headers['x-api-key']) {
-        headers['x-api-key'] = apiKey;
-      }
-      
-      const response = await axios.get(`${baseUrl}/chains`, { headers });
+
+      const response = await http({
+        method: 'GET',
+        url: new URL('chains', baseUrl),
+        headers: buildHeaders(apiKey),
+        signal
+      })
       const chainsArray = response.data;
       
       let targetChain;
@@ -80,9 +77,6 @@ export async function fetchChains(
       
       return targetChain;
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(`Failed to fetch chain information: ${error.response.data}`);
-      }
       throw new Error(`Failed to fetch chain information: ${error}`);
     }
   }
@@ -98,16 +92,16 @@ export async function fetchChains(
     chain: string | number,
     baseUrl: string = AORI_API,
     apiKey?: string,
-    headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    }
+    { signal }: { signal?: AbortSignal } = {},
   ): Promise<string> {
     try {
-      if (apiKey && !headers['x-api-key']) {
-        headers['x-api-key'] = apiKey;
-      }
       
-      const response = await axios.get(`${baseUrl}/chains`, { headers });
+      const response = await http({
+        method: 'GET',
+        url: new URL('chains', baseUrl),
+        headers: buildHeaders(apiKey),
+        signal
+      });
       const chainsArray = response.data;
       
       let targetChain;
@@ -130,9 +124,6 @@ export async function fetchChains(
       
       return targetChain.address;
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(`Failed to fetch chain address: ${error.response.data}`);
-      }
       throw new Error(`Failed to fetch chain address: ${error}`);
     }
   }
@@ -148,16 +139,15 @@ export async function getChainByEid(
     eid: number,
     baseUrl: string = AORI_API,
     apiKey?: string,
-    headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    }
+   { signal }: { signal?: AbortSignal } = {},
   ): Promise<ChainInfo> {
     try {
-      if (apiKey && !headers['x-api-key']) {
-        headers['x-api-key'] = apiKey;
-      }
-      
-      const response = await axios.get(`${baseUrl}/chains`, { headers });
+      const response = await http({
+        method: 'GET',
+        url: new URL('chains', baseUrl),
+        headers: buildHeaders(apiKey),
+        signal
+      });
       const chainsArray = response.data;
       
       const targetChain = chainsArray.find((chainInfo: ChainInfo) => 
@@ -170,9 +160,6 @@ export async function getChainByEid(
       
       return targetChain;
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(`Failed to fetch chain information: ${error.response.data}`);
-      }
       throw new Error(`Failed to fetch chain information: ${error}`);
     }
   }
@@ -185,26 +172,22 @@ export async function getChainByEid(
     request: QuoteRequest,
     baseUrl: string = AORI_API,
     apiKey?: string,
-    headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    }
+    { signal }: { signal?: AbortSignal } = {},
   ): Promise<QuoteResponse> {
     try {
-      
-      if (apiKey && !headers['x-api-key']) {
-        headers['x-api-key'] = apiKey;
-      }
-      
-      const response = await axios.post(`${baseUrl}/quote`, {
-        ...request,
-        inputAmount: request.inputAmount.toString(), // Convert any number type to string
-      }, { headers });
+      const response = await http({
+        method: 'POST',
+        url: new URL('quote', baseUrl),
+        headers: buildHeaders(apiKey),
+        signal,
+        data: {
+          ...request,
+          inputAmount: request.inputAmount.toString(), // Convert any number type to string
+        }
+      });
       
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(`Quote request failed: ${error.response.data}`);
-      }
       throw new Error(`Quote request failed: ${error}`);
     }
   }
@@ -354,19 +337,20 @@ export async function getChainByEid(
     request: SwapRequest,
     baseUrl: string = AORI_API,
     apiKey?: string,
-    headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    }
+    { signal }: { signal?: AbortSignal } = {},
   ): Promise<SwapResponse> {
     try {
-      if (apiKey && !headers['x-api-key']) {
-        headers['x-api-key'] = apiKey;
-      }
-      
-      const response = await axios.post(`${baseUrl}/swap`, {
-        orderHash: request.orderHash,
-        signature: request.signature,
-      }, { headers });
+
+      const response = await http({
+        method: 'POST',
+        url: new URL('swap', baseUrl),
+        headers: buildHeaders(apiKey),
+        signal,
+        data: {
+          orderHash: request.orderHash,
+          signature: request.signature,
+        }
+      });
   
       const data = response.data;
       return {
@@ -385,9 +369,6 @@ export async function getChainByEid(
         createdAt: data.createdAt,
       };
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(`Swap request failed: ${error.response.data}`);
-      }
       throw new Error(`Swap request failed: ${error}`);
     }
   }
@@ -407,21 +388,17 @@ export async function getChainByEid(
     orderHash: string,
     baseUrl: string = AORI_API,
     apiKey?: string,
-    headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    }
+    { signal }: { signal?: AbortSignal } = {},
   ): Promise<OrderStatus> {
-    try {
-      if (apiKey && !headers['x-api-key']) {
-        headers['x-api-key'] = apiKey;
-      }
-      
-      const response = await axios.get(`${baseUrl}/data/status/${orderHash}`, { headers });
+    try {   
+      const response = await http({
+        method: 'GET',
+        url: new URL(`data/status/${orderHash}`, baseUrl),
+        headers: buildHeaders(apiKey),
+        signal
+      });
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(`Failed to fetch order status: ${error.response.data}`);
-      }
       throw new Error(`Failed to fetch order status: ${error}`);
     }
   }
@@ -439,9 +416,7 @@ export async function getChainByEid(
     baseUrl: string = AORI_API,
     options: PollOrderStatusOptions = {},
     apiKey?: string,
-    headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    }
+    { signal }: { signal?: AbortSignal } = {},
   ): Promise<OrderStatus> {
     const {
       onStatusChange,
@@ -466,7 +441,7 @@ export async function getChainByEid(
           }
   
           // Use the getOrderStatus function with apiKey
-          const status = await getOrderStatus(orderHash, baseUrl, apiKey, headers);
+          const status = await getOrderStatus(orderHash, baseUrl, apiKey, { signal });
   
           // Notify if status has changed
           if (status.status !== lastStatus) {
@@ -511,21 +486,17 @@ export async function getChainByEid(
     orderHash: string,
     baseUrl: string = AORI_API,
     apiKey?: string,
-    headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    }
+    { signal }: { signal?: AbortSignal } = {},
   ): Promise<OrderDetails> {
     try {
-      if (apiKey && !headers['x-api-key']) {
-        headers['x-api-key'] = apiKey;
-      }
-      
-      const response = await axios.get(`${baseUrl}/data/details/${orderHash}`, { headers });
+      const response = await http({
+        method: 'GET',
+        url: new URL(`data/details/${orderHash}`, baseUrl),
+        headers: buildHeaders(apiKey),
+        signal
+      });
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(`Failed to fetch order details: ${error.response.data}`);
-      }
       throw new Error(`Failed to fetch order details: ${error}`);
     }
   }
@@ -547,24 +518,25 @@ export async function getChainByEid(
     baseUrl: string,
     params: QueryOrdersParams,
     apiKey?: string,
-    headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    }
+    { signal }: { signal?: AbortSignal } = {},
   ): Promise<QueryOrdersResponse> {
     try {
-      if (apiKey && !headers['x-api-key']) {
-        headers['x-api-key'] = apiKey;
+
+      const url = new URL('data/query', baseUrl);
+      for (const [key, value] of Object.entries(params)) {
+        url.searchParams.set(key, value);
       }
-      
-      const response = await axios.get(`${baseUrl}/data/query`, {
-        params: params,
-        headers
+      const response = await http({
+        method: 'GET',
+        url,
+        headers: buildHeaders(apiKey),
+        signal,
       });
   
       return response.data;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 404) {
+      if (error instanceof HttpError) {
+        if (error.response.status === 404) {
           // Return empty result with pagination
           return {
             orders: [],
@@ -577,11 +549,59 @@ export async function getChainByEid(
           };
         }
   
-        if (error.response?.data) {
-          throw new Error(`API error: ${error.response.data.message || JSON.stringify(error.response.data)}`);
-        }
-      }
-  
-      throw new Error(`Failed to query orders: ${String(error)}`);
+
+      throw new Error(`API error: ${error.message}`);
+
     }
+
+    throw new Error(`Failed to query orders: ${String(error)}`);
   }
+}
+
+async function http<ResponseType = any>({
+    method,
+    url,
+    data,
+    signal,
+    headers,
+}: {
+    method: string;
+    url: URL;
+    data?: any;
+    signal?: AbortSignal;
+    headers?: HeadersInit;
+}) {
+    const response = await fetch(url, {
+        method,
+        body: data ? JSON.stringify(data) : undefined,
+        headers,
+        signal,
+    });
+
+    if (!response.ok) {
+        const text = await response.text();
+        throw new HttpError(text, response.status, response);
+    }
+
+    return {
+        status: response.status,
+        headers: response.headers,
+        data: await response.json() as ResponseType,
+    };
+}
+
+function buildHeaders(apiKey?: string): HeadersInit {
+    const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+    };
+    if (apiKey) {
+        headers['x-api-key'] = apiKey;
+    }
+    return headers;
+}
+
+class HttpError extends Error {
+    constructor(message: string, public status: number, public response: Response) {
+        super(message);
+    }
+}

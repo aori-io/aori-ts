@@ -1,6 +1,7 @@
-import * as nock from 'nock';
+import { http, HttpResponse } from 'msw'
+import { setupServer } from 'msw/node'
 import { Aori } from '../../src/core';
-import { getChain, getAddress } from '../../src/helpers';
+import { getChain, getAddress, getQuote } from '../../src/helpers';
 import { AORI_API } from '../../src/constants';
 
 describe('Aori API Integration Tests', () => {
@@ -25,21 +26,20 @@ describe('Aori API Integration Tests', () => {
     }
   ];
 
-  beforeEach(() => {
-    // Clean up any pending nocks
-    nock.cleanAll();
-  });
+  const handlers = [
+    http.get('https://api.aori.io/chains', () => {
+      return HttpResponse.json(mockChains)
+    }),
+  ]
+  const server = setupServer(...handlers)
 
-  afterAll(() => {
-    nock.restore();
-  });
+  beforeAll(() => server.listen())
+  afterEach(() => server.resetHandlers())
+  afterAll(() => server.close())
+
 
   describe('Chain fetching', () => {
     it('should fetch chains from live API', async () => {
-      // Mock the chains endpoint
-      nock(AORI_API)
-        .get('/chains')
-        .reply(200, mockChains);
 
       const aori = await Aori.create();
 
@@ -54,38 +54,34 @@ describe('Aori API Integration Tests', () => {
 
     it('should handle API errors gracefully', async () => {
       // Mock API error
-      nock(AORI_API)
-        .get('/chains')
-        .reply(500, { error: 'Internal Server Error' });
+      server.use(
+        http.get('https://api.aori.io/chains', () => {
+          return HttpResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+        })
+      )
 
       await expect(Aori.create()).rejects.toThrow('Failed to fetch chains');
     });
 
     it('should include API key in requests when provided', async () => {
       const apiKey = 'test-api-key-123';
+      let xApiKeyHeader;
 
-      nock(AORI_API, {
-        reqheaders: {
-          'x-api-key': apiKey
-        }
-      })
-        .get('/chains')
-        .reply(200, mockChains);
+      server.use(
+        http.get('https://api.aori.io/chains', (req) => {
+          xApiKeyHeader = req.request.headers.get('x-api-key');
+          return HttpResponse.json(mockChains)
+        })
+      )
 
       const aori = await Aori.create(AORI_API, 'wss://ws.aori.io', apiKey);
 
       expect(aori.chains).toHaveProperty('base');
+      expect(xApiKeyHeader).toBe(apiKey);
     });
   });
 
   describe('Standalone functions', () => {
-    beforeEach(() => {
-      // Mock chains endpoint for standalone functions
-      nock(AORI_API)
-        .get('/chains')
-        .reply(200, mockChains);
-    });
-
     it('should get chain info by string identifier', async () => {
       const chain = await getChain('base');
 
@@ -118,12 +114,6 @@ describe('Aori API Integration Tests', () => {
   });
 
   describe('Quote functionality', () => {
-    beforeEach(() => {
-      // Mock chains endpoint
-      nock(AORI_API)
-        .get('/chains')
-        .reply(200, mockChains);
-    });
 
     it('should request quotes successfully', async () => {
       const mockQuoteResponse = {
@@ -142,9 +132,11 @@ describe('Aori API Integration Tests', () => {
         estimatedTime: 300
       };
 
-      nock(AORI_API)
-        .post('/quote')
-        .reply(200, mockQuoteResponse);
+      server.use(
+        http.post('https://api.aori.io/quote', async (req) => {
+          return HttpResponse.json(mockQuoteResponse)
+        })
+      )
 
       const aori = await Aori.create();
 
@@ -170,13 +162,12 @@ describe('Aori API Integration Tests', () => {
     });
 
     it('should handle quote errors', async () => {
-      nock(AORI_API)
-        .get('/chains')
-        .reply(200, mockChains);
 
-      nock(AORI_API)
-        .post('/quote')
-        .reply(400, { error: 'Invalid input amount' });
+      server.use(
+        http.post('https://api.aori.io/quote', async (req) => {
+          return HttpResponse.json({ error: 'Invalid input amount' }, { status: 400 })
+        })
+      )
 
       const aori = await Aori.create();
 
@@ -195,17 +186,36 @@ describe('Aori API Integration Tests', () => {
   });
 
   describe('Rate limiting and retries', () => {
-    beforeEach(() => {
-      nock(AORI_API)
-        .get('/chains')
-        .reply(200, mockChains);
-    });
+    it('should handle timeout errors gracefully', async () => {
+      server.use(
+        http.post('https://api.aori.io/quote', async (req) => {
+          await new Promise(resolve => setTimeout(resolve, 500));
+          return HttpResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+        })
+      )
+
+      const quoteRequest = {
+        offerer: '0x742d35Cc6635C0532925a3b8D698d2B0C44a4D5e',
+        recipient: '0x742d35Cc6635C0532925a3b8D698d2B0C44a4D5e',
+        inputToken: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        outputToken: '0xA0b86a33E6441b6c4A27A5b6B5E7A7f7c7A6E5D4',
+        inputAmount: '0',
+        inputChain: 'base',
+        outputChain: 'arbitrum'
+      };
+
+      await expect(getQuote(quoteRequest, undefined, undefined, { signal: AbortSignal.timeout(100) }))
+        .rejects.toThrow('Quote request failed: TimeoutError: The operation was aborted due to timeout')
+
+    })
 
     it('should handle rate limiting gracefully', async () => {
       // First request fails with rate limit
-      nock(AORI_API)
-        .post('/quote')
-        .reply(429, { error: 'Rate limit exceeded' });
+      server.use(
+        http.post('https://api.aori.io/quote', async (req) => {
+          return HttpResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+        })
+      )
 
       const aori = await Aori.create();
 
