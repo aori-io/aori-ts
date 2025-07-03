@@ -1,5 +1,5 @@
 import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketCallbacks, SubscriptionParams } from './types';
-import { fetchChains, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder } from './helpers';
+import { fetchAllChains, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder } from './helpers';
 import {
   AORI_API,
   AORI_WS_API
@@ -45,7 +45,7 @@ export class Aori {
    * @returns A promise that resolves with the Aori instance
    */
   public static async create(apiBaseUrl: string = AORI_API, wsBaseUrl: string = AORI_WS_API, apiKey?: string) {
-    const chains = await fetchChains(apiBaseUrl, apiKey);
+    const chains = await fetchAllChains(apiBaseUrl, apiKey);
     return new Aori(chains, apiBaseUrl, wsBaseUrl, apiKey);
   }
 
@@ -72,6 +72,14 @@ export class Aori {
   }
 
   /**
+   * Returns all supported chains and their information
+   * @returns A record mapping chainKey to ChainInfo for all supported chains
+   */
+  public getAllChains(): Record<string, ChainInfo> {
+    return this.chains;
+  }
+
+  /**
    * Signs an order using EIP-712 typed data format
    * @param quoteResponse The quote response containing order details
    * @param signer The wallet client that can sign typed data
@@ -79,7 +87,28 @@ export class Aori {
    * @returns The signature and orderHash
    */
   public async signReadableOrder(quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string) {
-    return await signReadableOrder(quoteResponse, signer, userAddress, this.apiBaseUrl, this.apiKey, this.chains);
+    // Get the specific chain info from our cached chains
+    const inputChain = this.chains[quoteResponse.inputChain.toLowerCase()];
+    const outputChain = this.chains[quoteResponse.outputChain.toLowerCase()];
+    
+    // Validate that we have the required chain information
+    if (!inputChain) {
+      throw new Error(`Input chain '${quoteResponse.inputChain}' not found in cached chains. Available chains: ${Object.keys(this.chains).join(', ')}`);
+    }
+    
+    if (!outputChain) {
+      throw new Error(`Output chain '${quoteResponse.outputChain}' not found in cached chains. Available chains: ${Object.keys(this.chains).join(', ')}`);
+    }
+    
+    return await signReadableOrder(
+      quoteResponse, 
+      signer, 
+      userAddress, 
+      this.apiBaseUrl, 
+      this.apiKey,
+      inputChain,
+      outputChain
+    );
   }
 
   /**
@@ -155,10 +184,11 @@ export class Aori {
   /**
    * Requests a quote for a swap
    * @param request The quote request
+   * @param options Optional parameters including AbortSignal
    * @returns The quote response
    */
-  public async getQuote(request: QuoteRequest): Promise<QuoteResponse> {
-    return await getQuote(request, this.apiBaseUrl, this.apiKey);
+  public async getQuote(request: QuoteRequest, options: { signal?: AbortSignal } = {}): Promise<QuoteResponse> {
+    return await getQuote(request, this.apiBaseUrl, this.apiKey, options);
   }
 
   /**
@@ -174,47 +204,52 @@ export class Aori {
   /**
    * Submits a swap request to the Aori API
    * @param request The swap request
+   * @param options Optional parameters including AbortSignal
    * @returns The swap response
    */
-  public async submitSwap(request: SwapRequest) {
-    return await submitSwap(request, this.apiBaseUrl, this.apiKey);
+  public async submitSwap(request: SwapRequest, options: { signal?: AbortSignal } = {}) {
+    return await submitSwap(request, this.apiBaseUrl, this.apiKey, options);
   }
 
   /**
    * Fetches the current status of an order
    * @param orderHash The hash of the order to check
+   * @param options Optional parameters including AbortSignal
    * @returns The order status
    */
-  public async getOrderStatus(orderHash: string) {
-    return await getOrderStatus(orderHash, this.apiBaseUrl, this.apiKey);
+  public async getOrderStatus(orderHash: string, options: { signal?: AbortSignal } = {}) {
+    return await getOrderStatus(orderHash, this.apiBaseUrl, this.apiKey, options);
   }
 
   /**
    * Polls the order status until it's completed, failed, or times out
    * @param orderHash The hash of the order to poll
    * @param options Polling options and callbacks
+   * @param abortOptions Optional parameters including AbortSignal
    * @returns The final order status
    */
-  public async pollOrderStatus(orderHash: string, options: PollOrderStatusOptions = {}) {
-    return await pollOrderStatus(orderHash, this.apiBaseUrl, options, this.apiKey);
+  public async pollOrderStatus(orderHash: string, options: PollOrderStatusOptions = {}, abortOptions: { signal?: AbortSignal } = {}) {
+    return await pollOrderStatus(orderHash, this.apiBaseUrl, options, this.apiKey, abortOptions);
   }
 
   /**
    * Fetches detailed information about an order
    * @param orderHash The hash of the order to get details for
+   * @param options Optional parameters including AbortSignal
    * @returns The order details
    */
-  public async getOrderDetails(orderHash: string) {
-    return await getOrderDetails(orderHash, this.apiBaseUrl, this.apiKey);
+  public async getOrderDetails(orderHash: string, options: { signal?: AbortSignal } = {}) {
+    return await getOrderDetails(orderHash, this.apiBaseUrl, this.apiKey, options);
   }
 
   /**
    * Queries orders with filtering criteria
    * @param params The parameters to filter the orders by
+   * @param options Optional parameters including AbortSignal
    * @returns The query results
    */
-  public async queryOrders(params: QueryOrdersParams) {
-    return await queryOrders(this.apiBaseUrl, params, this.apiKey);
+  public async queryOrders(params: QueryOrdersParams, options: { signal?: AbortSignal } = {}) {
+    return await queryOrders(this.apiBaseUrl, params, this.apiKey, options);
   }
 }
 

@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
-import { getChain, getAddress, fetchChains } from '../../src/helpers';
+import { getChain, getAddress, fetchAllChains } from '../../src/helpers';
 import { ChainInfo } from '../../src/types';
 
 
@@ -37,10 +37,10 @@ describe('Chain Helper Functions', () => {
   afterEach(() => server.resetHandlers())
   afterAll(() => server.close())
 
-  describe('fetchChains', () => {
+  describe('fetchAllChains', () => {
     it('should fetch and format chains correctly', async () => {
 
-      const result = await fetchChains();
+      const result = await fetchAllChains();
 
       expect(result).toEqual({
         base: mockChains[0],
@@ -59,13 +59,13 @@ describe('Chain Helper Functions', () => {
           return HttpResponse.json(mockChains)
         })
       )
-      await fetchChains('https://api.aori.io', 'test-api-key');
+      await fetchAllChains('https://api.aori.io', 'test-api-key');
       expect(xApiKeyHeader).toBe(apiKey);
     });
 
     it('should handle API errors gracefully', async () => {
       const fetchSpy = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network error'));
-      await expect(fetchChains()).rejects.toThrow('Failed to fetch chains: Error: Network error');
+      await expect(fetchAllChains()).rejects.toThrow('Failed to fetch chains: Error: Network error');
       fetchSpy.mockRestore();
     });
   });

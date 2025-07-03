@@ -3,7 +3,8 @@ module.exports = {
   parser: '@typescript-eslint/parser',
   parserOptions: {
     ecmaVersion: 2020,
-    sourceType: 'module'
+    sourceType: 'module',
+    project: './tsconfig.json'
   },
   plugins: ['@typescript-eslint'],
   root: true,
@@ -19,6 +20,7 @@ module.exports = {
     'no-var': 'error',
     'no-console': ['warn', { allow: ['error'] }],
     'no-unused-vars': 'off',
-    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }]
+    '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+    'no-undef': 'off' // TypeScript handles undefined variables better than ESLint
   }
 }; 

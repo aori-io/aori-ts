@@ -110,6 +110,142 @@ const quote = await getQuote(quoteRequest, 'https://api.aori.io', apiKey);
 const swap = await submitSwap(swapRequest, 'https://api.aori.io', apiKey);
 ```
 
+## Request Cancellation with AbortSignal
+
+All API functions in the Aori SDK now support request cancellation using the native `AbortSignal` API. This allows you to cancel ongoing HTTP requests, which is especially useful for:
+
+- **Timeout handling**: Cancel requests that take too long
+- **User cancellation**: Allow users to cancel operations in progress
+- **Component cleanup**: Cancel requests when React components unmount
+- **Race conditions**: Cancel older requests when new ones are made
+
+### Basic Usage
+
+All functions accept an optional `{ signal }` parameter as their last argument:
+
+```typescript
+// Cancel request after 5 seconds
+const signal = AbortSignal.timeout(5000);
+const quote = await getQuote(quoteRequest, baseUrl, apiKey, { signal });
+```
+
+### Timeout Examples
+
+```typescript
+import { getQuote, getOrderStatus } from '@aori/aori-ts';
+
+// Set a 3-second timeout for quote requests
+try {
+  const quote = await getQuote(quoteRequest, 'https://api.aori.io', apiKey, {
+    signal: AbortSignal.timeout(3000)
+  });
+  console.log('Quote received:', quote);
+} catch (error) {
+  if (error.name === 'TimeoutError') {
+    console.log('Quote request timed out after 3 seconds');
+  }
+}
+
+// Set a 10-second timeout for order status polling
+const status = await getOrderStatus(orderHash, 'https://api.aori.io', apiKey, {
+  signal: AbortSignal.timeout(10000)
+});
+```
+
+### Manual Cancellation
+
+```typescript
+// Create an abort controller for manual cancellation
+const controller = new AbortController();
+
+// Start a request
+const quotePromise = getQuote(quoteRequest, 'https://api.aori.io', apiKey, {
+  signal: controller.signal
+});
+
+// Cancel the request after 2 seconds
+setTimeout(() => {
+  controller.abort('User cancelled the request');
+}, 2000);
+
+try {
+  const quote = await quotePromise;
+} catch (error) {
+  if (error.name === 'AbortError') {
+    console.log('Request was cancelled:', error.reason);
+  }
+}
+```
+
+### React Component Example
+
+```typescript
+import React, { useEffect, useState } from 'react';
+import { getQuote } from '@aori/aori-ts';
+
+function QuoteComponent({ quoteRequest }) {
+  const [quote, setQuote] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    
+    const fetchQuote = async () => {
+      setLoading(true);
+      try {
+        const result = await getQuote(
+          quoteRequest, 
+          'https://api.aori.io', 
+          apiKey,
+          { signal: controller.signal }
+        );
+        setQuote(result);
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          console.error('Quote failed:', error);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuote();
+
+    // Cleanup: cancel the request if component unmounts
+    return () => controller.abort();
+  }, [quoteRequest]);
+
+  return loading ? <div>Loading...</div> : <div>{quote ? 'Quote loaded' : 'No quote'}</div>;
+}
+```
+
+### Supported Functions
+
+All the following functions support AbortSignal:
+
+- `getQuote(request, baseUrl, apiKey, { signal })`
+- `submitSwap(request, baseUrl, apiKey, { signal })`
+- `getOrderStatus(orderHash, baseUrl, apiKey, { signal })`
+- `pollOrderStatus(orderHash, baseUrl, options, apiKey, { signal })`
+- `getOrderDetails(orderHash, baseUrl, apiKey, { signal })`
+- `queryOrders(baseUrl, params, apiKey, { signal })`
+- `fetchAllChains(baseUrl, apiKey, { signal })`
+- `getChain(chain, baseUrl, apiKey, { signal })`
+- `getChainByEid(eid, baseUrl, apiKey, { signal })`
+- `getAddress(chain, baseUrl, apiKey, { signal })`
+
+### Aori Class Methods
+
+The `Aori` class methods also support AbortSignal through the same pattern:
+
+```typescript
+const aori = await Aori.create();
+
+// All instance methods support signal parameter
+const quote = await aori.getQuote(quoteRequest, { signal: AbortSignal.timeout(5000) });
+const status = await aori.getOrderStatus(orderHash, { signal: controller.signal });
+```
+
 ## API Reference
 
 | Method | Endpoint                   | Description                      | Request Body     |
@@ -251,6 +387,61 @@ console.log(baseChain.address); // "0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8"
 const ethereumChain = await getChain("ethereum", "https://api.aori.io", apiKey);
 ```
 
+#### Get All Supported Chains
+
+When using the Aori class, you can easily get all supported chains at once:
+
+```typescript
+import { Aori } from '@aori/aori-ts';
+
+const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+
+// Get all chains as a mapping of chainKey -> ChainInfo
+const allChains = aori.getAllChains();
+console.log(allChains);
+// {
+//   base: { chainKey: "base", chainId: 8453, eid: 30184, address: "0x...", ... },
+//   arbitrum: { chainKey: "arbitrum", chainId: 42161, eid: 30110, address: "0x...", ... },
+//   ...
+// }
+
+// Iterate through all chains
+Object.entries(allChains).forEach(([chainKey, chainInfo]) => {
+  console.log(`${chainKey}: Chain ID ${chainInfo.chainId}, EID ${chainInfo.eid}`);
+});
+
+// Check if a specific chain is supported
+if ('polygon' in allChains) {
+  console.log('Polygon is supported!');
+}
+
+// Get all chain IDs
+const chainIds = Object.values(allChains).map(chain => chain.chainId);
+console.log('Supported chain IDs:', chainIds); // [1, 8453, 42161, 10]
+
+// Find chains by specific criteria
+const evmChains = Object.values(allChains).filter(chain => chain.vm === 'EVM');
+console.log('EVM chains:', evmChains.length);
+
+// Get contract addresses for all chains
+const contractAddresses = Object.fromEntries(
+  Object.entries(allChains).map(([key, chain]) => [key, chain.address])
+);
+console.log('Contract addresses:', contractAddresses);
+```
+
+For standalone usage, you can use the `fetchAllChains` function:
+
+```typescript
+import { fetchAllChains } from '@aori/aori-ts';
+
+// Fetch all chains without creating an Aori instance
+const allChains = await fetchAllChains('https://api.aori.io', apiKey);
+
+// Same operations as above
+console.log('Available chains:', Object.keys(allChains));
+```
+
 #### Get Just the Contract Address
 
 ```typescript
@@ -289,19 +480,20 @@ const aori = await Aori.create(
 
 | Method | Description | Parameters | Return Type |
 | ------ | ----------- | ---------- | ----------- |
-| `getQuote` | Requests a quote for a token swap | `request: QuoteRequest` | `Promise<QuoteResponse>` |
+| `getQuote` | Requests a quote for a token swap | `request: QuoteRequest, options?: { signal?: AbortSignal }` | `Promise<QuoteResponse>` |
 | `signOrder` | Signs an order using the provided private key | `quoteResponse: QuoteResponse, signer: SignerType` | `Promise<string>` |
 | `signReadableOrder` | Signs an order using EIP-712 typed data | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string` | `Promise<{orderHash: string, signature: string}>` |
-| `submitSwap` | Submits a signed swap order to the Aori API | `request: SwapRequest` | `Promise<SwapResponse>` |
-| `getOrderStatus` | Gets the current status of an order | `orderHash: string` | `Promise<OrderStatus>` |
-| `pollOrderStatus` | Polls the status of an order until completion or timeout | `orderHash: string, options?: PollOrderStatusOptions` | `Promise<OrderStatus>` |
-| `getOrderDetails` | Fetches detailed information about an order | `orderHash: string` | `Promise<OrderDetails>` |
-| `queryOrders` | Queries orders with filtering criteria | `params: QueryOrdersParams` | `Promise<QueryOrdersResponse>` |
+| `submitSwap` | Submits a signed swap order to the Aori API | `request: SwapRequest, options?: { signal?: AbortSignal }` | `Promise<SwapResponse>` |
+| `getOrderStatus` | Gets the current status of an order | `orderHash: string, options?: { signal?: AbortSignal }` | `Promise<OrderStatus>` |
+| `pollOrderStatus` | Polls the status of an order until completion or timeout | `orderHash: string, options?: PollOrderStatusOptions, abortOptions?: { signal?: AbortSignal }` | `Promise<OrderStatus>` |
+| `getOrderDetails` | Fetches detailed information about an order | `orderHash: string, options?: { signal?: AbortSignal }` | `Promise<OrderDetails>` |
+| `queryOrders` | Queries orders with filtering criteria | `params: QueryOrdersParams, options?: { signal?: AbortSignal }` | `Promise<QueryOrdersResponse>` |
 | `connect` | Connects to the WebSocket server | `filter?: SubscriptionParams, callbacks?: WebSocketCallbacks` | `Promise<void>` |
 | `disconnect` | Disconnects from the WebSocket server | - | `void` |
 | `isConnected` | Checks if WebSocket is connected | - | `boolean` |
 | `getChain` | Gets chain info by chain identifier | `chain: string \| number` | `ChainInfo \| undefined` |
 | `getChainByEid` | Gets chain info by EID | `eid: number` | `ChainInfo \| undefined` |
+| `getAllChains` | Gets all supported chains and their information | - | `Record<string, ChainInfo>` |
 
 ### Standalone Functions (Non-Stateful Usage)
 
@@ -309,18 +501,18 @@ For simple operations without maintaining state, use these standalone functions:
 
 | Function | Description | Parameters | Return Type |
 | -------- | ----------- | ---------- | ----------- |
-| `getQuote` | Requests a quote for a token swap | `request: QuoteRequest, baseUrl?: string, apiKey?: string` | `Promise<QuoteResponse>` |
+| `getQuote` | Requests a quote for a token swap | `request: QuoteRequest, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<QuoteResponse>` |
 | `signOrder` | Signs an order using the provided private key | `quoteResponse: QuoteResponse, signer: SignerType` | `Promise<string>` |
-| `signReadableOrder` | Signs an order using EIP-712 typed data | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string, baseUrl?: string, apiKey?: string, chains?: Record<string, ChainInfo>` | `Promise<{orderHash: string, signature: string}>` |
-| `submitSwap` | Submits a signed swap order to the Aori API | `request: SwapRequest, baseUrl?: string, apiKey?: string` | `Promise<SwapResponse>` |
-| `getOrderStatus` | Gets the current status of an order | `orderHash: string, baseUrl?: string, apiKey?: string` | `Promise<OrderStatus>` |
-| `pollOrderStatus` | Polls the status of an order until completion or timeout | `orderHash: string, baseUrl?: string, options?: PollOrderStatusOptions, apiKey?: string` | `Promise<OrderStatus>` |
-| `getOrderDetails` | Fetches detailed information about an order | `orderHash: string, baseUrl?: string, apiKey?: string` | `Promise<OrderDetails>` |
-| `queryOrders` | Queries orders with filtering criteria | `baseUrl: string, params: QueryOrdersParams, apiKey?: string` | `Promise<QueryOrdersResponse>` |
-| `fetchChains` | Fetches the list of supported chains | `baseUrl?: string, apiKey?: string` | `Promise<Record<string, ChainInfo>>` |
-| `getChain` | Fetches the chain information for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string` | `Promise<ChainInfo>` |
-| `getChainByEid` | Fetches the chain information for a specific EID | `eid: number, baseUrl?: string, apiKey?: string` | `Promise<ChainInfo>` |
-| `getAddress` | Fetches the contract address for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string` | `Promise<string>` |
+| `signReadableOrder` | Signs an order using EIP-712 typed data | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string, baseUrl?: string, apiKey?: string, inputChainInfo?: ChainInfo, outputChainInfo?: ChainInfo` | `Promise<{orderHash: string, signature: string}>` |
+| `submitSwap` | Submits a signed swap order to the Aori API | `request: SwapRequest, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<SwapResponse>` |
+| `getOrderStatus` | Gets the current status of an order | `orderHash: string, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<OrderStatus>` |
+| `pollOrderStatus` | Polls the status of an order until completion or timeout | `orderHash: string, baseUrl?: string, options?: PollOrderStatusOptions, apiKey?: string, abortOptions?: { signal?: AbortSignal }` | `Promise<OrderStatus>` |
+| `getOrderDetails` | Fetches detailed information about an order | `orderHash: string, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<OrderDetails>` |
+| `queryOrders` | Queries orders with filtering criteria | `baseUrl: string, params: QueryOrdersParams, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<QueryOrdersResponse>` |
+| `fetchAllChains` | Fetches the list of supported chains | `baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<Record<string, ChainInfo>>` |
+| `getChain` | Fetches the chain information for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<ChainInfo>` |
+| `getChainByEid` | Fetches the chain information for a specific EID | `eid: number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<ChainInfo>` |
+| `getAddress` | Fetches the contract address for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<string>` |
 
 # Examples
 
@@ -565,6 +757,19 @@ function SwapComponentWithFunctions() {
         apiKey
       );
 
+      // Alternative: Optimize by pre-fetching and caching chain info to avoid repeated API calls
+      // const inputChainInfo = await getChain(quote.inputChain, "https://api.aori.io", apiKey);
+      // const outputChainInfo = await getChain(quote.outputChain, "https://api.aori.io", apiKey);
+      // const { orderHash, signature } = await signReadableOrder(
+      //   quote,
+      //   walletWrapper,
+      //   address,
+      //   "https://api.aori.io",
+      //   apiKey,
+      //   inputChainInfo,  // Pre-fetched chain info
+      //   outputChainInfo  // Pre-fetched chain info
+      // );
+
       // 5. Submit the swap with signature:
       const swapRequest = {
         orderHash,
@@ -583,6 +788,363 @@ function SwapComponentWithFunctions() {
   };
 
   return <button onClick={handleSwap}> Swap Tokens </button>;
+}
+```
+
+### Request Cancellation and Timeout Handling
+
+This example demonstrates how to implement proper request cancellation and timeout handling:
+
+```typescript
+import { getQuote, submitSwap, pollOrderStatus } from '@aori/aori-ts';
+
+async function executeSwapWithTimeouts() {
+  const apiKey = process.env.AORI_API_KEY;
+  
+  try {
+    // 1. Get quote with 5-second timeout
+    console.log('Requesting quote...');
+    const quote = await getQuote(quoteRequest, 'https://api.aori.io', apiKey, {
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    console.log('Quote received:', quote);
+    
+    // ... sign the quote ...
+    
+    // 2. Submit swap with 10-second timeout
+    console.log('Submitting swap...');
+    const swapResponse = await submitSwap({
+      orderHash: quote.orderHash,
+      signature: signature
+    }, 'https://api.aori.io', apiKey, {
+      signal: AbortSignal.timeout(10000)
+    });
+    
+    console.log('Swap submitted:', swapResponse);
+    
+    // 3. Poll order status with overall 5-minute timeout
+    console.log('Monitoring order status...');
+    const finalStatus = await pollOrderStatus(
+      swapResponse.orderHash,
+      'https://api.aori.io',
+      {
+        interval: 2000,        // Check every 2 seconds
+        maxAttempts: 150,      // Maximum 150 attempts (5 minutes)
+        onStatusChange: (status) => console.log(`Status changed to: ${status.status}`)
+      },
+      apiKey,
+      { signal: AbortSignal.timeout(300000) } // 5-minute overall timeout
+    );
+    
+    console.log('Final status:', finalStatus);
+    
+  } catch (error) {
+    if (error.name === 'TimeoutError') {
+      console.error('Operation timed out:', error.message);
+    } else if (error.name === 'AbortError') {
+      console.error('Operation was cancelled:', error.message);
+    } else {
+      console.error('Operation failed:', error);
+    }
+  }
+}
+
+// Usage with manual cancellation
+async function executeSwapWithManualCancellation() {
+  const controller = new AbortController();
+  
+  // Set up cancellation after 30 seconds
+  const timeoutId = setTimeout(() => {
+    controller.abort('Operation taking too long');
+  }, 30000);
+  
+  try {
+    const quote = await getQuote(quoteRequest, 'https://api.aori.io', apiKey, {
+      signal: controller.signal
+    });
+    
+    // Clear timeout if quote succeeds quickly
+    clearTimeout(timeoutId);
+    
+    // Continue with swap...
+    const swapResponse = await submitSwap(swapRequest, 'https://api.aori.io', apiKey, {
+      signal: controller.signal
+    });
+    
+    console.log('Swap completed:', swapResponse);
+    
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    if (error.name === 'AbortError') {
+      console.log('User cancelled the operation');
+    } else {
+      console.error('Swap failed:', error);
+    }
+  }
+}
+
+// React hook for cancellable requests
+function useAoriSwap() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const controllerRef = useRef();
+  
+  const executeSwap = useCallback(async (quoteRequest) => {
+    // Cancel any existing request
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+    }
+    
+    controllerRef.current = new AbortController();
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const quote = await getQuote(
+        quoteRequest, 
+        'https://api.aori.io', 
+        apiKey, 
+        { signal: controllerRef.current.signal }
+      );
+      
+      // Continue with signing and submission...
+      // All using the same signal for consistent cancellation
+      
+      return quote;
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        setError(err);
+      }
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  
+  const cancel = useCallback(() => {
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+    }
+  }, []);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (controllerRef.current) {
+        controllerRef.current.abort();
+      }
+    };
+  }, []);
+  
+  return { executeSwap, cancel, loading, error };
+}
+```
+
+### Working with Multiple Chains
+
+This example demonstrates how to use `getAllChains()` to build applications that work across multiple chains:
+
+```typescript
+import { Aori } from '@aori/aori-ts';
+
+async function buildMultiChainApp() {
+  const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+  
+  // Get all supported chains
+  const allChains = aori.getAllChains();
+  
+  // Create a chain selector for a UI
+  const chainOptions = Object.entries(allChains).map(([key, chain]) => ({
+    value: key,
+    label: `${chain.chainKey} (${chain.chainId})`,
+    chainId: chain.chainId,
+    address: chain.address
+  }));
+  
+  console.log('Chain options for UI:', chainOptions);
+  
+  // Validate user input against supported chains
+  function validateChainInput(userChainInput: string | number): boolean {
+    if (typeof userChainInput === 'string') {
+      return userChainInput.toLowerCase() in allChains;
+    } else {
+      return Object.values(allChains).some(chain => chain.chainId === userChainInput);
+    }
+  }
+  
+  // Get optimal routes between chains
+  function getAvailableRoutes() {
+    const routes = [];
+    const chainKeys = Object.keys(allChains);
+    
+    for (const inputChain of chainKeys) {
+      for (const outputChain of chainKeys) {
+        if (inputChain !== outputChain) {
+          routes.push({
+            from: inputChain,
+            to: outputChain,
+            fromChainId: allChains[inputChain].chainId,
+            toChainId: allChains[outputChain].chainId
+          });
+        }
+      }
+    }
+    
+    return routes;
+  }
+  
+  const availableRoutes = getAvailableRoutes();
+  console.log(`Total available routes: ${availableRoutes.length}`);
+  
+  // Check contract deployment status
+  function checkContractDeployments() {
+    const deployments = Object.entries(allChains).map(([key, chain]) => ({
+      chain: key,
+      chainId: chain.chainId,
+      contractAddress: chain.address,
+      isDeployed: !!chain.address
+    }));
+    
+    const deployedCount = deployments.filter(d => d.isDeployed).length;
+    console.log(`Contracts deployed on ${deployedCount}/${deployments.length} chains`);
+    
+    return deployments;
+  }
+  
+  checkContractDeployments();
+  
+  // Build a quote request with validation
+  async function requestQuoteWithValidation(inputChain: string, outputChain: string, amount: string) {
+    // Validate chains are supported
+    if (!validateChainInput(inputChain)) {
+      throw new Error(`Input chain '${inputChain}' is not supported`);
+    }
+    
+    if (!validateChainInput(outputChain)) {
+      throw new Error(`Output chain '${outputChain}' is not supported`);
+    }
+    
+    if (inputChain === outputChain) {
+      throw new Error('Input and output chains must be different');
+    }
+    
+    const quoteRequest = {
+      offerer: userAddress,
+      recipient: userAddress,
+      inputToken: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
+      outputToken: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', // USDC on Arbitrum
+      inputAmount: amount,
+      inputChain: inputChain,
+      outputChain: outputChain
+    };
+    
+    console.log(`Requesting quote: ${inputChain} → ${outputChain}`);
+    return await aori.getQuote(quoteRequest);
+  }
+  
+  // Example usage
+  try {
+    const quote = await requestQuoteWithValidation('base', 'arbitrum', '1000000');
+    console.log('Quote received:', quote);
+  } catch (error) {
+    console.error('Quote failed:', error.message);
+  }
+}
+
+buildMultiChainApp().catch(console.error);
+
+// Performance optimization example with chain caching
+async function performanceOptimizedBatch() {
+  const apiKey = process.env.AORI_API_KEY;
+  
+  // Pre-fetch all chains once to avoid repeated API calls
+  const allChains = await fetchAllChains('https://api.aori.io', apiKey);
+  
+  const orders = [
+    { inputChain: 'base', outputChain: 'arbitrum', amount: '1000000' },
+    { inputChain: 'arbitrum', outputChain: 'optimism', amount: '2000000' },
+    { inputChain: 'optimism', outputChain: 'base', amount: '1500000' }
+  ];
+  
+  for (const order of orders) {
+    try {
+      // Get quote
+      const quote = await getQuote({
+        offerer: userAddress,
+        recipient: userAddress,
+        inputToken: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        outputToken: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+        inputAmount: order.amount,
+        inputChain: order.inputChain,
+        outputChain: order.outputChain
+      }, 'https://api.aori.io', apiKey);
+      
+      // Get cached chain info (no API calls needed!)
+      const inputChainInfo = allChains[order.inputChain];
+      const outputChainInfo = allChains[order.outputChain];
+      
+      // Sign with cached chain info - this avoids 2 API calls per order
+      const { orderHash, signature } = await signReadableOrder(
+        quote,
+        walletWrapper,
+        userAddress,
+        'https://api.aori.io',
+        apiKey,
+        inputChainInfo,   // Use cached chain info
+        outputChainInfo   // Use cached chain info
+      );
+      
+      console.log(`Order ${orderHash} signed efficiently with cached chain data`);
+      
+      // Submit swap
+      const swapResponse = await submitSwap({
+        orderHash,
+        signature
+      }, 'https://api.aori.io', apiKey);
+      
+      console.log(`Swap submitted: ${swapResponse.orderHash}`);
+      
+    } catch (error) {
+      console.error(`Failed to process order ${order.inputChain} → ${order.outputChain}:`, error);
+    }
+  }
+}
+
+// React component for chain selection
+function ChainSelector({ onChainSelect }) {
+  const [chains, setChains] = useState({});
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    async function loadChains() {
+      try {
+        const aori = await Aori.create();
+        const allChains = aori.getAllChains();
+        setChains(allChains);
+      } catch (error) {
+        console.error('Failed to load chains:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    loadChains();
+  }, []);
+  
+  if (loading) return <div>Loading chains...</div>;
+  
+  return (
+    <select onChange={(e) => onChainSelect(e.target.value)}>
+      <option value="">Select a chain</option>
+      {Object.entries(chains).map(([key, chain]) => (
+        <option key={key} value={key}>
+          {chain.chainKey} (Chain ID: {chain.chainId})
+        </option>
+      ))}
+    </select>
+  );
 }
 ```
 

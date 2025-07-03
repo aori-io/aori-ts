@@ -49,7 +49,7 @@ aori-ts/
 ### Unit Tests (`tests/unit/`)
 
 **helpers.test.ts**:
-- Tests `fetchChains()`, `getChain()`, `getAddress()` functions
+- Tests `fetchAllChains()`, `getChain()`, `getAddress()` functions
 - Mocks axios requests with Jest
 - Validates error handling and edge cases
 - Tests case-insensitive string matching
