@@ -209,8 +209,7 @@ export async function getChainByEid(
   ): Promise<string> {
     // Create signing key directly from private key
     const signingKey = new ethers.SigningKey(signer.privateKey);
-    const wallet = new ethers.Wallet(signer.privateKey);
-    wallet.signMessage
+    
     // Remove '0x' prefix if present and convert to Uint8Array
     const signingHashHex = quoteResponse.signingHash.startsWith('0x')
       ? quoteResponse.signingHash
@@ -546,14 +545,11 @@ export async function getChainByEid(
             }
           };
         }
-  
+        throw new Error(`API error: ${error.message}`);
+      }
 
-      throw new Error(`API error: ${error.message}`);
-
+      throw new Error(`Failed to query orders: ${String(error)}`);
     }
-
-    throw new Error(`Failed to query orders: ${String(error)}`);
-  }
 }
 
 async function http<ResponseType = any>({
