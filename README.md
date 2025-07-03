@@ -290,7 +290,6 @@ curl -X POST https://v3development.api.aori.io/quote \
   "inputToken": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   "outputToken": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
   "inputAmount": "100000000",
-  "outputAmount": "100000000",
   "outputAmount": "99999999",
   "inputChain": "base",
   "outputChain": "arbitrum",
@@ -309,8 +308,10 @@ The swap endpoint acts as the primary endpoint for users to post signed orders f
 ```bash
 curl -X POST https://api.aori.io/swap \
 -H "Content-Type: application/json" \
--d  'orderHash: "0x...",
-    'signature': "0x...",
+-d '{
+    "orderHash": "0x...",
+    "signature": "0x..."
+}'
 ```
 
 #### Example SwapResponse
@@ -503,7 +504,7 @@ For simple operations without maintaining state, use these standalone functions:
 | -------- | ----------- | ---------- | ----------- |
 | `getQuote` | Requests a quote for a token swap | `request: QuoteRequest, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<QuoteResponse>` |
 | `signOrder` | Signs an order using the provided private key | `quoteResponse: QuoteResponse, signer: SignerType` | `Promise<string>` |
-| `signReadableOrder` | Signs an order using EIP-712 typed data | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string, baseUrl?: string, apiKey?: string, inputChainInfo?: ChainInfo, outputChainInfo?: ChainInfo` | `Promise<{orderHash: string, signature: string}>` |
+| `signReadableOrder` | Signs an order using EIP-712 typed data | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string, baseUrl?: string, apiKey?: string, inputChain?: ChainInfo, outputChain?: ChainInfo` | `Promise<{orderHash: string, signature: string}>` |
 | `submitSwap` | Submits a signed swap order to the Aori API | `request: SwapRequest, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<SwapResponse>` |
 | `getOrderStatus` | Gets the current status of an order | `orderHash: string, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<OrderStatus>` |
 | `pollOrderStatus` | Polls the status of an order until completion or timeout | `orderHash: string, baseUrl?: string, options?: PollOrderStatusOptions, apiKey?: string, abortOptions?: { signal?: AbortSignal }` | `Promise<OrderStatus>` |
@@ -682,12 +683,25 @@ function SwapComponentWithClass() {
         },
       };
 
-      // 4. Sign the order using EIP-712:
+      // 4. Sign the order using EIP-712 (chains fetched automatically from quote):
       const { orderHash, signature } = await aori.signReadableOrder(
         quote,
         walletWrapper,
         address
       );
+
+      // Alternative: Optimize by pre-fetching and caching chain info to avoid repeated API calls
+      // const inputChain = await getChain(quote.inputChain, "https://api.aori.io", apiKey);
+      // const outputChain = await getChain(quote.outputChain, "https://api.aori.io", apiKey);
+      // const { orderHash, signature } = await signReadableOrder(
+      //   quote,
+      //   walletWrapper,
+      //   address,
+      //   "https://api.aori.io",
+      //   apiKey,
+      //   inputChain,   // Pre-fetched chain info
+      //   outputChain   // Pre-fetched chain info
+      // );
 
       // 5. Submit the swap with signature:
       const swapRequest = {
@@ -700,7 +714,7 @@ function SwapComponentWithClass() {
 
       // 6. Check current order status:
       const status = await aori.getOrderStatus(swapResponse.orderHash);
-      console.log(`Current order status: ${status.type}`);
+      console.log(`Current order status: ${status.status}`);
     } catch (error) {
       console.error("Swap failed:", error);
     }
@@ -758,16 +772,16 @@ function SwapComponentWithFunctions() {
       );
 
       // Alternative: Optimize by pre-fetching and caching chain info to avoid repeated API calls
-      // const inputChainInfo = await getChain(quote.inputChain, "https://api.aori.io", apiKey);
-      // const outputChainInfo = await getChain(quote.outputChain, "https://api.aori.io", apiKey);
+      // const inputChain = await getChain(quote.inputChain, "https://api.aori.io", apiKey);
+      // const outputChain = await getChain(quote.outputChain, "https://api.aori.io", apiKey);
       // const { orderHash, signature } = await signReadableOrder(
       //   quote,
       //   walletWrapper,
       //   address,
       //   "https://api.aori.io",
       //   apiKey,
-      //   inputChainInfo,  // Pre-fetched chain info
-      //   outputChainInfo  // Pre-fetched chain info
+      //   inputChain,   // Pre-fetched chain info
+      //   outputChain   // Pre-fetched chain info
       // );
 
       // 5. Submit the swap with signature:
@@ -781,7 +795,7 @@ function SwapComponentWithFunctions() {
 
       // 6. Check current order status:
       const status = await getOrderStatus(swapResponse.orderHash, "https://api.aori.io", apiKey);
-      console.log(`Current order status: ${status.type}`);
+      console.log(`Current order status: ${status.status}`);
     } catch (error) {
       console.error("Swap failed:", error);
     }
@@ -1082,8 +1096,8 @@ async function performanceOptimizedBatch() {
       }, 'https://api.aori.io', apiKey);
       
       // Get cached chain info (no API calls needed!)
-      const inputChainInfo = allChains[order.inputChain];
-      const outputChainInfo = allChains[order.outputChain];
+      const inputChain = allChains[order.inputChain];
+      const outputChain = allChains[order.outputChain];
       
       // Sign with cached chain info - this avoids 2 API calls per order
       const { orderHash, signature } = await signReadableOrder(
@@ -1092,8 +1106,8 @@ async function performanceOptimizedBatch() {
         userAddress,
         'https://api.aori.io',
         apiKey,
-        inputChainInfo,   // Use cached chain info
-        outputChainInfo   // Use cached chain info
+        inputChain,   // Use cached chain info
+        outputChain   // Use cached chain info
       );
       
       console.log(`Order ${orderHash} signed efficiently with cached chain data`);
