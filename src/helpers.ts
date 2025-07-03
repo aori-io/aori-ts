@@ -6,7 +6,7 @@ import { ChainInfo, QuoteRequest, QuoteResponse, SignerType, SwapRequest, SwapRe
 //                      HELPER FUNCTIONS
 //////////////////////////////////////////////////////////////*/
 
-export async function fetchChains(
+export async function fetchAllChains(
     baseUrl: string = AORI_API,
     apiKey?: string,
    { signal }: { signal?: AbortSignal } = {},
@@ -241,34 +241,32 @@ export async function getChainByEid(
     userAddress: string,
     baseUrl: string = AORI_API,
     apiKey?: string,
-    chains?: Record<string, ChainInfo>
+    inputChain?: ChainInfo,
+    outputChain?: ChainInfo
   ): Promise<{ orderHash: string, signature: string }> {
-    // Use cached chains if provided, otherwise fetch from API
-    let inputChainInfo: ChainInfo;
-    let outputChainInfo: ChainInfo;
+    // Use provided chain info if available, otherwise fetch from API
+    let resolvedInputChainInfo: ChainInfo;
+    let resolvedOutputChainInfo: ChainInfo;
     
-    if (chains) {
-      // use cached chains
-      inputChainInfo = chains[quoteResponse.inputChain.toLowerCase()];
-      outputChainInfo = chains[quoteResponse.outputChain.toLowerCase()];
-      
-      if (!inputChainInfo) {
-        throw new Error(`Chain information not found for ${quoteResponse.inputChain}`);
-      }
-      if (!outputChainInfo) {
-        throw new Error(`Chain information not found for ${quoteResponse.outputChain}`);
-      }
+    if (inputChain) {
+      resolvedInputChainInfo = inputChain;
     } else {
-      // fetch chains from API
-      inputChainInfo = await getChain(quoteResponse.inputChain, baseUrl, apiKey);
-      outputChainInfo = await getChain(quoteResponse.outputChain, baseUrl, apiKey);
+      // fetch input chain from API
+      resolvedInputChainInfo = await getChain(quoteResponse.inputChain, baseUrl, apiKey);
+    }
+    
+    if (outputChain) {
+      resolvedOutputChainInfo = outputChain;
+    } else {
+      // fetch output chain from API
+      resolvedOutputChainInfo = await getChain(quoteResponse.outputChain, baseUrl, apiKey);
     }
     // Define the types for EIP-712 typed data
     const types = {
       EIP712Domain: [
         { name: "name", type: "string" },
         { name: "version", type: "string" },
-        { name: "verifyingContract", type: "address" }
+        { name: "verifyingContract", type: "address" }   
       ],
       Order: [
         { name: "inputAmount", type: "uint128" },
@@ -303,16 +301,16 @@ export async function getChainByEid(
       outputAmount: BigInt(quoteResponse.outputAmount),
       startTime: BigInt(Number(startTimeStr)),
       endTime: BigInt(Number(endTimeStr)),
-      srcEid: inputChainInfo.eid,
-      dstEid: outputChainInfo.eid,
+      srcEid: resolvedInputChainInfo.eid,
+      dstEid: resolvedOutputChainInfo.eid,
     };
   
     // Create the domain object
     const domain = {
       name: "Aori",
       version: "0.3.0",
-      chainId: BigInt(inputChainInfo.chainId),
-      verifyingContract: inputChainInfo.address
+      chainId: BigInt(resolvedInputChainInfo.chainId),
+      verifyingContract: resolvedInputChainInfo.address
     };
   
     // Sign the typed data

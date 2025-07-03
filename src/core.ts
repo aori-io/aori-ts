@@ -1,5 +1,5 @@
 import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketCallbacks, SubscriptionParams } from './types';
-import { fetchChains, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder } from './helpers';
+import { fetchAllChains, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder } from './helpers';
 import {
   AORI_API,
   AORI_WS_API
@@ -45,7 +45,7 @@ export class Aori {
    * @returns A promise that resolves with the Aori instance
    */
   public static async create(apiBaseUrl: string = AORI_API, wsBaseUrl: string = AORI_WS_API, apiKey?: string) {
-    const chains = await fetchChains(apiBaseUrl, apiKey);
+    const chains = await fetchAllChains(apiBaseUrl, apiKey);
     return new Aori(chains, apiBaseUrl, wsBaseUrl, apiKey);
   }
 
@@ -72,6 +72,14 @@ export class Aori {
   }
 
   /**
+   * Returns all supported chains and their information
+   * @returns A record mapping chainKey to ChainInfo for all supported chains
+   */
+  public getAllChains(): Record<string, ChainInfo> {
+    return this.chains;
+  }
+
+  /**
    * Signs an order using EIP-712 typed data format
    * @param quoteResponse The quote response containing order details
    * @param signer The wallet client that can sign typed data
@@ -79,7 +87,28 @@ export class Aori {
    * @returns The signature and orderHash
    */
   public async signReadableOrder(quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string) {
-    return await signReadableOrder(quoteResponse, signer, userAddress, this.apiBaseUrl, this.apiKey, this.chains);
+    // Get the specific chain info from our cached chains
+    const inputChain = this.chains[quoteResponse.inputChain.toLowerCase()];
+    const outputChain = this.chains[quoteResponse.outputChain.toLowerCase()];
+    
+    // Validate that we have the required chain information
+    if (!inputChain) {
+      throw new Error(`Input chain '${quoteResponse.inputChain}' not found in cached chains. Available chains: ${Object.keys(this.chains).join(', ')}`);
+    }
+    
+    if (!outputChain) {
+      throw new Error(`Output chain '${quoteResponse.outputChain}' not found in cached chains. Available chains: ${Object.keys(this.chains).join(', ')}`);
+    }
+    
+    return await signReadableOrder(
+      quoteResponse, 
+      signer, 
+      userAddress, 
+      this.apiBaseUrl, 
+      this.apiKey,
+      inputChain,
+      outputChain
+    );
   }
 
   /**
