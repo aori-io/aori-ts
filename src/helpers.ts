@@ -229,37 +229,14 @@ export async function getChainByEid(
   
     return formattedSignature;
   }
-  
+
   //////////////////////////////////////////////////////////////*/
-  //                     SIGN READABLE ORDER
+  //                     CREATE TYPED DATA
   //////////////////////////////////////////////////////////////*/
-  
-  export async function signReadableOrder(
+  export function createTypedData(
     quoteResponse: QuoteResponse,
-    signer: TypedDataSigner,
-    userAddress: string,
-    baseUrl: string = AORI_API,
-    apiKey?: string,
-    inputChain?: ChainInfo,
-    outputChain?: ChainInfo
-  ): Promise<{ orderHash: string, signature: string }> {
-    // Use provided chain info if available, otherwise fetch from API
-    let resolvedInputChainInfo: ChainInfo;
-    let resolvedOutputChainInfo: ChainInfo;
-    
-    if (inputChain) {
-      resolvedInputChainInfo = inputChain;
-    } else {
-      // fetch input chain from API
-      resolvedInputChainInfo = await getChain(quoteResponse.inputChain, baseUrl, apiKey);
-    }
-    
-    if (outputChain) {
-      resolvedOutputChainInfo = outputChain;
-    } else {
-      // fetch output chain from API
-      resolvedOutputChainInfo = await getChain(quoteResponse.outputChain, baseUrl, apiKey);
-    }
+    {srcEid, dstEid, chainId, verifyingContract}: {srcEid: number, dstEid: number, chainId: number, verifyingContract: `0x${string}`}
+  ) {
     // Define the types for EIP-712 typed data
     const types = {
       EIP712Domain: [
@@ -300,24 +277,71 @@ export async function getChainByEid(
       outputAmount: BigInt(quoteResponse.outputAmount),
       startTime: BigInt(Number(startTimeStr)),
       endTime: BigInt(Number(endTimeStr)),
-      srcEid: resolvedInputChainInfo.eid,
-      dstEid: resolvedOutputChainInfo.eid,
+      srcEid,
+      dstEid,
     };
   
     // Create the domain object
     const domain = {
       name: "Aori",
       version: "0.3.0",
-      chainId: BigInt(resolvedInputChainInfo.chainId),
-      verifyingContract: resolvedInputChainInfo.address
-    };
+      chainId: BigInt(chainId),
+      verifyingContract
+    } as const;
+
+    return {
+      domain,
+      types,
+      primaryType: "Order",
+      message
+    } as const
+  }
+  
+  //////////////////////////////////////////////////////////////*/
+  //                     SIGN READABLE ORDER
+  //////////////////////////////////////////////////////////////*/
+  
+  export async function signReadableOrder(
+    quoteResponse: QuoteResponse,
+    signer: TypedDataSigner,
+    userAddress: string,
+    baseUrl: string = AORI_API,
+    apiKey?: string,
+    inputChain?: ChainInfo,
+    outputChain?: ChainInfo
+  ): Promise<{ orderHash: string, signature: string }> {
+    // Use provided chain info if available, otherwise fetch from API
+    let resolvedInputChainInfo: ChainInfo;
+    let resolvedOutputChainInfo: ChainInfo;
+    
+    if (inputChain) {
+      resolvedInputChainInfo = inputChain;
+    } else {
+      // fetch input chain from API
+      resolvedInputChainInfo = await getChain(quoteResponse.inputChain, baseUrl, apiKey);
+    }
+    
+    if (outputChain) {
+      resolvedOutputChainInfo = outputChain;
+    } else {
+      // fetch output chain from API
+      resolvedOutputChainInfo = await getChain(quoteResponse.outputChain, baseUrl, apiKey);
+    }
+
+    const { domain, types, primaryType, message } = createTypedData(quoteResponse, {
+      srcEid: resolvedInputChainInfo.eid,
+      dstEid: resolvedOutputChainInfo.eid,
+      chainId: resolvedInputChainInfo.chainId,
+      verifyingContract: resolvedInputChainInfo.address as `0x${string}`
+    });
+
   
     // Sign the typed data
     const signature = await signer.signTypedData({
       account: userAddress,
       domain,
       types,
-      primaryType: "Order",
+      primaryType,
       message
     });
   
