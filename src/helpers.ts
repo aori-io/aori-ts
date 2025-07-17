@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import { AORI_API } from './constants';
-import { ChainInfo, QuoteRequest, QuoteResponse, SignerType, SwapRequest, SwapResponse, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails } from './types';
+import { ChainInfo, TokenInfo, QuoteRequest, QuoteResponse, SignerType, SwapRequest, SwapResponse, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails } from './types';
 
 ////////////////////////////////////////////////////////////////*/
 //                      HELPER FUNCTIONS
@@ -162,6 +162,63 @@ export async function getChainByEid(
     } catch (error) {
       throw new Error(`Failed to fetch chain information: ${error}`);
     }
+  }
+
+  //////////////////////////////////////////////////////////////*/
+  //                        TOKEN FUNCTIONS
+  //////////////////////////////////////////////////////////////*/
+
+  /**
+   * Fetches all tokens across all chains or for a specific chain
+   * @param baseUrl The base URL of the API
+   * @param apiKey Optional API key for authentication
+   * @param chain Optional chain identifier to filter by - can be either chainId (number) or chainKey (string)
+   * @returns All tokens or tokens filtered by chain
+   */
+  export async function fetchAllTokens(
+    baseUrl: string = AORI_API,
+    apiKey?: string,
+    { signal, chain }: { signal?: AbortSignal; chain?: string | number } = {},
+  ): Promise<TokenInfo[]> {
+    try {
+      const url = new URL('tokens', baseUrl);
+      
+      // Add chain filter if provided
+      if (chain !== undefined) {
+        if (typeof chain === 'string') {
+          url.searchParams.set('chainKey', chain);
+        } else {
+          url.searchParams.set('chainId', chain.toString());
+        }
+      }
+
+      const response = await http({
+        method: 'GET',
+        url,
+        headers: buildHeaders(apiKey),
+        signal,
+      });
+
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to fetch tokens: ${error}`);
+    }
+  }
+
+  /**
+   * Fetches tokens for a specific chain
+   * @param chain The chain identifier - can be either chainId (number) or chainKey (string)
+   * @param baseUrl The base URL of the API
+   * @param apiKey Optional API key for authentication
+   * @returns The tokens for the specified chain
+   */
+  export async function getTokens(
+    chain: string | number,
+    baseUrl: string = AORI_API,
+    apiKey?: string,
+    { signal }: { signal?: AbortSignal } = {},
+  ): Promise<TokenInfo[]> {
+    return await fetchAllTokens(baseUrl, apiKey, { signal, chain });
   }
 
   //////////////////////////////////////////////////////////////*/

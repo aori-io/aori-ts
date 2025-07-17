@@ -79,6 +79,17 @@ export interface ChainInfo {
     address: string;
 }
 
+//========================================================
+//                Token Info Interface
+//========================================================
+
+export interface TokenInfo {
+    symbol: string;
+    address: string;
+    chainId: number;
+    chainKey: string;
+}
+
 //============================================
 //          Order Status Interfaces
 //=============================================

@@ -233,6 +233,8 @@ All the following functions support AbortSignal:
 - `getChain(chain, baseUrl, apiKey, { signal })`
 - `getChainByEid(eid, baseUrl, apiKey, { signal })`
 - `getAddress(chain, baseUrl, apiKey, { signal })`
+- `fetchAllTokens(baseUrl, apiKey, { signal, chain })`
+- `getTokens(chain, baseUrl, apiKey, { signal })`
 
 ### Aori Class Methods
 
@@ -244,6 +246,10 @@ const aori = await Aori.create();
 // All instance methods support signal parameter
 const quote = await aori.getQuote(quoteRequest, { signal: AbortSignal.timeout(5000) });
 const status = await aori.getOrderStatus(orderHash, { signal: controller.signal });
+
+// Token methods also support AbortSignal
+await aori.loadTokens('ethereum', { signal: AbortSignal.timeout(3000) });
+const tokens = await aori.fetchTokens('base', { signal: controller.signal });
 ```
 
 ## API Reference
@@ -251,6 +257,7 @@ const status = await aori.getOrderStatus(orderHash, { signal: controller.signal 
 | Method | Endpoint                   | Description                      | Request Body     |
 | ------ | -------------------------- | -------------------------------- | ---------------- |
 | `GET`  | `/chains`                  | Get a list of supported chains   | -                |
+| `GET`  | `/tokens`                  | Get a list of supported tokens   | -                |
 | `POST` | `/quote`                   | Get a quote                      | `<QuoteRequest>` |
 | `POST` | `/swap`                    | Execute Swap                     | `<SwapRequest>`  |
 | `GET`  | `/data/query`              | Query Historical Orders Database | 
@@ -265,7 +272,7 @@ The swap endpoint acts as the primary endpoint for users to request quotes.
 #### Example QuoteRequest
 
 ```bash
-curl -X POST https://v3development.api.aori.io/quote \
+curl -X POST https://api.aori.io/quote \
 -H "Content-Type: application/json" \
 -H "x-api-key: your_api_key_here" \
 -d '{
@@ -495,6 +502,10 @@ const aori = await Aori.create(
 | `getChain` | Gets chain info by chain identifier | `chain: string \| number` | `ChainInfo \| undefined` |
 | `getChainByEid` | Gets chain info by EID | `eid: number` | `ChainInfo \| undefined` |
 | `getAllChains` | Gets all supported chains and their information | - | `Record<string, ChainInfo>` |
+| `loadTokens` | Loads tokens into cache from API | `chain?: string \| number, options?: { signal?: AbortSignal }` | `Promise<void>` |
+| `getAllTokens` | Gets all cached tokens | - | `TokenInfo[]` |
+| `getTokens` | Gets cached tokens for specific chain | `chain: string \| number` | `TokenInfo[]` |
+| `fetchTokens` | Fetches tokens from API (bypasses cache) | `chain: string \| number, options?: { signal?: AbortSignal }` | `Promise<TokenInfo[]>` |
 
 ### Standalone Functions (Non-Stateful Usage)
 
@@ -514,6 +525,8 @@ For simple operations without maintaining state, use these standalone functions:
 | `getChain` | Fetches the chain information for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<ChainInfo>` |
 | `getChainByEid` | Fetches the chain information for a specific EID | `eid: number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<ChainInfo>` |
 | `getAddress` | Fetches the contract address for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<string>` |
+| `fetchAllTokens` | Fetches all tokens, optionally filtered by chain | `baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal, chain?: string \| number }` | `Promise<TokenInfo[]>` |
+| `getTokens` | Fetches tokens for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<TokenInfo[]>` |
 
 # Examples
 
