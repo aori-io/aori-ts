@@ -80,6 +80,17 @@ export interface ChainInfo {
 }
 
 //========================================================
+//                Domain Info Interface
+//========================================================
+
+export interface DomainInfo {
+    domainTypeString: string;
+    name: string;
+    orderTypeString: string;
+    version: string;
+}
+
+//========================================================
 //                Token Info Interface
 //========================================================
 

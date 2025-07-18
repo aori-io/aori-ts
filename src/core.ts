@@ -1,5 +1,5 @@
-import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, TokenInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketCallbacks, SubscriptionParams } from './types';
-import { fetchAllChains, fetchAllTokens, getTokens, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder } from './helpers';
+import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, DomainInfo, TokenInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketCallbacks, SubscriptionParams } from './types';
+import { fetchAllChains, getDomain, fetchAllTokens, getTokens, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder } from './helpers';
 import {
   AORI_API,
   AORI_WS_API
@@ -11,6 +11,7 @@ import {
 export class Aori {
   // General
   public chains: Record<string, ChainInfo> = {};
+  public domain: DomainInfo | null = null;
   public tokens: TokenInfo[] = [];
   public apiBaseUrl: string = AORI_API;
   private apiKey?: string;
@@ -22,6 +23,7 @@ export class Aori {
   /**
    * Creates a new Aori instance
    * @param chains The list of supported chains and their configurations
+   * @param domain The domain information for EIP-712 typed data signing
    * @param apiBaseUrl The base URL of the API
    * @param wsBaseUrl The base URL of the WebSocket API
    * @param apiKey Optional API key for authentication
@@ -29,6 +31,7 @@ export class Aori {
    */
   private constructor(
     chains: Record<string, ChainInfo>,
+    domain: DomainInfo,
     apiBaseUrl: string = AORI_API,
     wsBaseUrl: string = AORI_WS_API,
     apiKey?: string,
@@ -38,6 +41,7 @@ export class Aori {
     this.wsBaseUrl = wsBaseUrl.replace(/^http/, 'ws');
     this.apiKey = apiKey;
     this.chains = chains;
+    this.domain = domain;
     this.tokens = tokens;
   }
 
@@ -50,8 +54,11 @@ export class Aori {
    * @returns A promise that resolves with the Aori instance
    */
   public static async create(apiBaseUrl: string = AORI_API, wsBaseUrl: string = AORI_WS_API, apiKey?: string) {
-    const chains = await fetchAllChains(apiBaseUrl, apiKey);
-    return new Aori(chains, apiBaseUrl, wsBaseUrl, apiKey);
+    const [chains, domain] = await Promise.all([
+      fetchAllChains(apiBaseUrl, apiKey),
+      getDomain(apiBaseUrl, apiKey)
+    ]);
+    return new Aori(chains, domain, apiBaseUrl, wsBaseUrl, apiKey);
   }
 
   /**
@@ -82,6 +89,14 @@ export class Aori {
    */
   public getAllChains(): Record<string, ChainInfo> {
     return this.chains;
+  }
+
+  /**
+   * Returns the cached domain information needed for EIP-712 typed data signing
+   * @returns The domain information containing name, version, and type strings
+   */
+  public getDomain(): DomainInfo | null {
+    return this.domain;
   }
 
   /**
@@ -153,7 +168,8 @@ export class Aori {
       this.apiBaseUrl, 
       this.apiKey,
       inputChain,
-      outputChain
+      outputChain,
+      this.domain ?? undefined
     );
   }
 
