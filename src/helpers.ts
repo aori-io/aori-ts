@@ -551,7 +551,7 @@ export async function getChainByEid(
       onStatusChange,
       onComplete,
       onError,
-      interval = 100,
+      interval = 500,
       timeout = 60000
     } = options;
   
@@ -653,7 +653,9 @@ export async function getChainByEid(
 
       const url = new URL('data/query', baseUrl);
       for (const [key, value] of Object.entries(params)) {
-        url.searchParams.set(key, value);
+        if (value !== undefined) {
+          url.searchParams.set(key, String(value));
+        }
       }
       const response = await http({
         method: 'GET',

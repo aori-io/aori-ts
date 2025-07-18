@@ -50,15 +50,28 @@ export class Aori {
    * @param apiBaseUrl The base URL of the API
    * @param wsBaseUrl The base URL of the WebSocket API
    * @param apiKey Optional API key for authentication
-   * @param wsOptions Optional WebSocket options
+   * @param loadTokens Optional boolean to load all tokens during initialization. Default: false
    * @returns A promise that resolves with the Aori instance
    */
-  public static async create(apiBaseUrl: string = AORI_API, wsBaseUrl: string = AORI_WS_API, apiKey?: string) {
+  public static async create(
+    apiBaseUrl: string = AORI_API, 
+    wsBaseUrl: string = AORI_WS_API, 
+    apiKey?: string,
+    loadTokens?: boolean
+  ) {
+    // Always fetch chains and domain
     const [chains, domain] = await Promise.all([
       fetchAllChains(apiBaseUrl, apiKey),
       getDomain(apiBaseUrl, apiKey)
     ]);
-    return new Aori(chains, domain, apiBaseUrl, wsBaseUrl, apiKey);
+
+    // Conditionally fetch all tokens
+    let tokens: TokenInfo[] = [];
+    if (loadTokens === true) {
+      tokens = await fetchAllTokens(apiBaseUrl, apiKey);
+    }
+
+    return new Aori(chains, domain, apiBaseUrl, wsBaseUrl, apiKey, tokens);
   }
 
   /**
@@ -231,7 +244,17 @@ export class Aori {
    */
   public disconnect(): void {
     if (this.ws) {
-      this.ws.close();
+      // Remove event listeners to prevent memory leaks
+      this.ws.onopen = null;
+      this.ws.onmessage = null;
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      
+      // Close connection if still open
+      if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
+        this.ws.close();
+      }
+      
       this.ws = null;
     }
   }

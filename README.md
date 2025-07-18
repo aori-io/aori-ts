@@ -230,6 +230,7 @@ All the following functions support AbortSignal:
 - `getOrderDetails(orderHash, baseUrl, apiKey, { signal })`
 - `queryOrders(baseUrl, params, apiKey, { signal })`
 - `fetchAllChains(baseUrl, apiKey, { signal })`
+- `getDomain(baseUrl, apiKey, { signal })`
 - `getChain(chain, baseUrl, apiKey, { signal })`
 - `getChainByEid(eid, baseUrl, apiKey, { signal })`
 - `getAddress(chain, baseUrl, apiKey, { signal })`
@@ -257,6 +258,7 @@ const tokens = await aori.fetchTokens('base', { signal: controller.signal });
 | Method | Endpoint                   | Description                      | Request Body     |
 | ------ | -------------------------- | -------------------------------- | ---------------- |
 | `GET`  | `/chains`                  | Get a list of supported chains   | -                |
+| `GET`  | `/domain`                  | Get EIP-712 domain information   | -                |
 | `GET`  | `/tokens`                  | Get a list of supported tokens   | -                |
 | `POST` | `/quote`                   | Get a quote                      | `<QuoteRequest>` |
 | `POST` | `/swap`                    | Execute Swap                     | `<SwapRequest>`  |
@@ -264,6 +266,21 @@ const tokens = await aori.fetchTokens('base', { signal: controller.signal });
 | `GET`  | `/data/details/{orderHash}`| Query Single Orders Database | -                |
 | `GET`  | `/data/status/{orderHash}` | Get Swap Details/Status          | -                |
 | `WS`   | `/stream`                  | Open a Websocket Connection      | -                |
+
+### `/domain`
+
+The domain endpoint provides EIP-712 domain information needed for typed data signing. This information is automatically fetched and cached when creating an Aori instance.
+
+#### Example Response
+
+```json
+{
+  "domainTypeString": "EIP712Domain(string name,string version,address verifyingContract)",
+  "name": "Aori",
+  "orderTypeString": "Order(uint128 inputAmount,uint128 outputAmount,address inputToken,address outputToken,uint32 startTime,uint32 endTime,uint32 srcEid,uint32 dstEid,address offerer,address recipient)",
+  "version": "0.3.1"
+}
+```
 
 ### `/quote`
 
@@ -467,6 +484,64 @@ console.log(baseAddress); // "0xFfe691A6dDb5D2645321e0a920C2e7Bdd00dD3D8"
 const address = await getAddress("ethereum", "https://api.aori.io", apiKey);
 ```
 
+## Domain Information
+
+The Aori SDK automatically handles EIP-712 domain information needed for typed data signing. This information includes the domain name, version, and type definitions required for secure order signing.
+
+### Automatic Domain Fetching
+
+When you create an Aori instance, domain information is automatically fetched and cached:
+
+```typescript
+import { Aori } from '@aori/aori-ts';
+
+// Domain info is automatically fetched and cached during creation
+const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+
+// Access cached domain information
+const domainInfo = aori.getDomain();
+console.log(domainInfo);
+// {
+//   domainTypeString: "EIP712Domain(string name,string version,address verifyingContract)",
+//   name: "Aori",
+//   orderTypeString: "Order(uint128 inputAmount,uint128 outputAmount,...)",
+//   version: "0.3.1"
+// }
+```
+
+### Standalone Domain Fetching
+
+For stateless usage, you can fetch domain information directly:
+
+```typescript
+import { getDomain } from '@aori/aori-ts';
+
+const domainInfo = await getDomain('https://api.aori.io', apiKey);
+console.log(`Domain: ${domainInfo.name} v${domainInfo.version}`);
+```
+
+### Integration with Order Signing
+
+Domain information is automatically used when signing orders with EIP-712:
+
+```typescript
+// When using the Aori class, domain info is automatically included
+const { orderHash, signature } = await aori.signReadableOrder(
+  quote,
+  walletWrapper,
+  userAddress
+); // Domain info from cache is used automatically
+
+// For standalone usage, domain info is fetched automatically if not provided
+const { orderHash, signature } = await signReadableOrder(
+  quote,
+  walletWrapper,
+  userAddress,
+  'https://api.aori.io',
+  apiKey
+); // Domain info is fetched from API automatically
+```
+
 ## SDK Reference
 
 ### Aori Class (Stateful Usage)
@@ -476,13 +551,39 @@ The `Aori` class provides a stateful interface for interacting with the Aori API
 #### Constructor and Initialization
 
 ```typescript
-// Create an Aori instance with automatic chain fetching
+// Create an Aori instance with automatic chain and domain fetching
 const aori = await Aori.create(
   apiBaseUrl?: string,    // Default: 'https://api.aori.io'
   wsBaseUrl?: string,     // Default: 'wss://api.aori.io'
-  apiKey?: string         // Optional API key
+  apiKey?: string,        // Optional API key
+  loadTokens?: boolean    // Optional: load all tokens during initialization
 );
 ```
+
+The `loadTokens` parameter allows you to pre-load all tokens during initialization:
+
+```typescript
+// Don't load tokens (default behavior)
+const aori = await Aori.create();
+
+// Load all tokens across all chains
+const aoriWithAllTokens = await Aori.create(
+  'https://api.aori.io',
+  'wss://api.aori.io', 
+  apiKey,
+  true  // Load all tokens
+);
+
+// For specific chains, load them after creation
+const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+
+// Load tokens for specific chains using instance method
+await aori.loadTokens('ethereum');  // Load Ethereum tokens
+await aori.loadTokens(8453);        // Load Base tokens (chainId: 8453)
+await aori.loadTokens();            // Load all tokens
+```
+
+**Performance Benefits**: Pre-loading all tokens during initialization eliminates the need for separate API calls later when you call `getTokens()` or `getAllTokens()`. For specific chains, use the `loadTokens()` instance method after creation.
 
 #### Instance Methods
 
@@ -502,6 +603,7 @@ const aori = await Aori.create(
 | `getChain` | Gets chain info by chain identifier | `chain: string \| number` | `ChainInfo \| undefined` |
 | `getChainByEid` | Gets chain info by EID | `eid: number` | `ChainInfo \| undefined` |
 | `getAllChains` | Gets all supported chains and their information | - | `Record<string, ChainInfo>` |
+| `getDomain` | Gets cached EIP-712 domain information | - | `DomainInfo \| null` |
 | `loadTokens` | Loads tokens into cache from API | `chain?: string \| number, options?: { signal?: AbortSignal }` | `Promise<void>` |
 | `getAllTokens` | Gets all cached tokens | - | `TokenInfo[]` |
 | `getTokens` | Gets cached tokens for specific chain | `chain: string \| number` | `TokenInfo[]` |
@@ -522,6 +624,7 @@ For simple operations without maintaining state, use these standalone functions:
 | `getOrderDetails` | Fetches detailed information about an order | `orderHash: string, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<OrderDetails>` |
 | `queryOrders` | Queries orders with filtering criteria | `baseUrl: string, params: QueryOrdersParams, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<QueryOrdersResponse>` |
 | `fetchAllChains` | Fetches the list of supported chains | `baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<Record<string, ChainInfo>>` |
+| `getDomain` | Fetches EIP-712 domain information for typed data signing | `baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<DomainInfo>` |
 | `getChain` | Fetches the chain information for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<ChainInfo>` |
 | `getChainByEid` | Fetches the chain information for a specific EID | `eid: number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<ChainInfo>` |
 | `getAddress` | Fetches the contract address for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<string>` |

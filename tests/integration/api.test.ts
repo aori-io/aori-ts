@@ -30,6 +30,14 @@ describe('Aori API Integration Tests', () => {
     http.get('https://api.aori.io/chains', () => {
       return HttpResponse.json(mockChains)
     }),
+    http.get('https://api.aori.io/domain', () => {
+      return HttpResponse.json({
+        domainTypeString: "EIP712Domain(string name,string version,address verifyingContract)",
+        name: "Aori",
+        orderTypeString: "Order(uint128 inputAmount,uint128 outputAmount,address inputToken,address outputToken,uint32 startTime,uint32 endTime,uint32 srcEid,uint32 dstEid,address offerer,address recipient)",
+        version: "0.3.1"
+      })
+    }),
   ]
   const server = setupServer(...handlers)
 

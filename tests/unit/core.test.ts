@@ -1,4 +1,4 @@
-import { http, HttpResponse, ws } from 'msw'
+import { http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { Aori } from '../../src/core';
 import { ChainInfo } from '../../src/types';
@@ -23,6 +23,14 @@ describe('Aori Class', () => {
   const handlers = [
     http.get('https://api.aori.io/chains', () => {
       return HttpResponse.json(mockChains)
+    }),
+    http.get('https://api.aori.io/domain', () => {
+      return HttpResponse.json({
+        domainTypeString: "EIP712Domain(string name,string version,address verifyingContract)",
+        name: "Aori",
+        orderTypeString: "Order(uint128 inputAmount,uint128 outputAmount,address inputToken,address outputToken,uint32 startTime,uint32 endTime,uint32 srcEid,uint32 dstEid,address offerer,address recipient)",
+        version: "0.3.1"
+      })
     }),
   ]
   const server = setupServer(...handlers)
@@ -49,6 +57,14 @@ describe('Aori Class', () => {
       server.use(
         http.get('https://custom-api.example.com/chains', () => {
           return HttpResponse.json(mockChains)
+        }),
+        http.get('https://custom-api.example.com/domain', () => {
+          return HttpResponse.json({
+            domainTypeString: "EIP712Domain(string name,string version,address verifyingContract)",
+            name: "Aori",
+            orderTypeString: "Order(uint128 inputAmount,uint128 outputAmount,address inputToken,address outputToken,uint32 startTime,uint32 endTime,uint32 srcEid,uint32 dstEid,address offerer,address recipient)",
+            version: "0.3.1"
+          })
         })
       )
 
@@ -157,7 +173,7 @@ describe('Aori Class', () => {
       expect(body).toMatchObject(quoteRequest);
 
       expect(result).toEqual(mockQuoteResponse);
-      expect(result.orderHash).toBeValidOrderHash();
+      expect(result.orderHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
     });
   });
 
