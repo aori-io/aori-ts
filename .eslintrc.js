@@ -14,7 +14,7 @@ module.exports = {
     es6: true,
     browser: true
   },
-  ignorePatterns: ['.eslintrc.js', 'dist/', 'coverage/', 'node_modules/'],
+  ignorePatterns: ['.eslintrc.js', 'dist/', 'coverage/', 'node_modules/', 'examples/'],
   rules: {
     'prefer-const': 'error',
     'no-var': 'error',
