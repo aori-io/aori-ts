@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import { AORI_API } from './constants';
-import { ChainInfo, QuoteRequest, QuoteResponse, SignerType, SwapRequest, SwapResponse, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails } from './types';
+import { ChainInfo, DomainInfo, TokenInfo, QuoteRequest, QuoteResponse, SignerType, SwapRequest, SwapResponse, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails } from './types';
 
 ////////////////////////////////////////////////////////////////*/
 //                      HELPER FUNCTIONS
@@ -165,6 +165,92 @@ export async function getChainByEid(
   }
 
   //////////////////////////////////////////////////////////////*/
+  //                        DOMAIN FUNCTIONS
+  //////////////////////////////////////////////////////////////*/
+
+  /**
+   * Fetches the domain information needed for EIP-712 typed data signing
+   * @param baseUrl The base URL of the API
+   * @param apiKey Optional API key for authentication
+   * @returns The domain information containing name, version, and type strings
+   */
+  export async function getDomain(
+    baseUrl: string = AORI_API,
+    apiKey?: string,
+    { signal }: { signal?: AbortSignal } = {},
+  ): Promise<DomainInfo> {
+    try {
+      const response = await http({
+        method: 'GET',
+        url: new URL('domain', baseUrl),
+        headers: buildHeaders(apiKey),
+        signal,
+      });
+
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to fetch domain information: ${error}`);
+    }
+  }
+
+  //////////////////////////////////////////////////////////////*/
+  //                        TOKEN FUNCTIONS
+  //////////////////////////////////////////////////////////////*/
+
+  /**
+   * Fetches all tokens across all chains or for a specific chain
+   * @param baseUrl The base URL of the API
+   * @param apiKey Optional API key for authentication
+   * @param chain Optional chain identifier to filter by - can be either chainId (number) or chainKey (string)
+   * @returns All tokens or tokens filtered by chain
+   */
+  export async function fetchAllTokens(
+    baseUrl: string = AORI_API,
+    apiKey?: string,
+    { signal, chain }: { signal?: AbortSignal; chain?: string | number } = {},
+  ): Promise<TokenInfo[]> {
+    try {
+      const url = new URL('tokens', baseUrl);
+      
+      // Add chain filter if provided
+      if (chain !== undefined) {
+        if (typeof chain === 'string') {
+          url.searchParams.set('chainKey', chain);
+        } else {
+          url.searchParams.set('chainId', chain.toString());
+        }
+      }
+
+      const response = await http({
+        method: 'GET',
+        url,
+        headers: buildHeaders(apiKey),
+        signal,
+      });
+
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to fetch tokens: ${error}`);
+    }
+  }
+
+  /**
+   * Fetches tokens for a specific chain
+   * @param chain The chain identifier - can be either chainId (number) or chainKey (string)
+   * @param baseUrl The base URL of the API
+   * @param apiKey Optional API key for authentication
+   * @returns The tokens for the specified chain
+   */
+  export async function getTokens(
+    chain: string | number,
+    baseUrl: string = AORI_API,
+    apiKey?: string,
+    { signal }: { signal?: AbortSignal } = {},
+  ): Promise<TokenInfo[]> {
+    return await fetchAllTokens(baseUrl, apiKey, { signal, chain });
+  }
+
+  //////////////////////////////////////////////////////////////*/
   //                         GET A QUOTE
   //////////////////////////////////////////////////////////////*/
   
@@ -235,7 +321,7 @@ export async function getChainByEid(
   //////////////////////////////////////////////////////////////*/
   export function createTypedData(
     quoteResponse: QuoteResponse,
-    {srcEid, dstEid, chainId, verifyingContract}: {srcEid: number, dstEid: number, chainId: number, verifyingContract: `0x${string}`}
+    {srcEid, dstEid, chainId, verifyingContract, domainInfo}: {srcEid: number, dstEid: number, chainId: number, verifyingContract: `0x${string}`, domainInfo: DomainInfo}
   ) {
     // Define the types for EIP-712 typed data
     const types = {
@@ -283,8 +369,8 @@ export async function getChainByEid(
   
     // Create the domain object
     const domain = {
-      name: "Aori",
-      version: "0.3.0",
+      name: domainInfo.name,
+      version: domainInfo.version,
       chainId: BigInt(chainId),
       verifyingContract
     } as const;
@@ -301,6 +387,18 @@ export async function getChainByEid(
   //                     SIGN READABLE ORDER
   //////////////////////////////////////////////////////////////*/
   
+  /**
+   * Signs an order using EIP-712 typed data format
+   * @param quoteResponse The quote response containing order details
+   * @param signer The wallet client that can sign typed data
+   * @param userAddress The address of the user signing the order
+   * @param baseUrl The base URL of the API
+   * @param apiKey Optional API key for authentication
+   * @param inputChain Optional input chain info. If not provided, will fetch from API
+   * @param outputChain Optional output chain info. If not provided, will fetch from API
+   * @param domainInfo Optional domain info for EIP-712. If not provided, will fetch from API
+   * @returns The signature and orderHash
+   */
   export async function signReadableOrder(
     quoteResponse: QuoteResponse,
     signer: TypedDataSigner,
@@ -308,11 +406,13 @@ export async function getChainByEid(
     baseUrl: string = AORI_API,
     apiKey?: string,
     inputChain?: ChainInfo,
-    outputChain?: ChainInfo
+    outputChain?: ChainInfo,
+    domainInfo?: DomainInfo
   ): Promise<{ orderHash: string, signature: string }> {
     // Use provided chain info if available, otherwise fetch from API
     let resolvedInputChainInfo: ChainInfo;
     let resolvedOutputChainInfo: ChainInfo;
+    let resolvedDomainInfo: DomainInfo;
     
     if (inputChain) {
       resolvedInputChainInfo = inputChain;
@@ -328,11 +428,19 @@ export async function getChainByEid(
       resolvedOutputChainInfo = await getChain(quoteResponse.outputChain, baseUrl, apiKey);
     }
 
+    if (domainInfo) {
+      resolvedDomainInfo = domainInfo;
+    } else {
+      // fetch domain info from API
+      resolvedDomainInfo = await getDomain(baseUrl, apiKey);
+    }
+
     const { domain, types, primaryType, message } = createTypedData(quoteResponse, {
       srcEid: resolvedInputChainInfo.eid,
       dstEid: resolvedOutputChainInfo.eid,
       chainId: resolvedInputChainInfo.chainId,
-      verifyingContract: resolvedInputChainInfo.address as `0x${string}`
+      verifyingContract: resolvedInputChainInfo.address as `0x${string}`,
+      domainInfo: resolvedDomainInfo
     });
 
   
@@ -443,7 +551,7 @@ export async function getChainByEid(
       onStatusChange,
       onComplete,
       onError,
-      interval = 100,
+      interval = 500,
       timeout = 60000
     } = options;
   
@@ -545,7 +653,9 @@ export async function getChainByEid(
 
       const url = new URL('data/query', baseUrl);
       for (const [key, value] of Object.entries(params)) {
-        url.searchParams.set(key, value);
+        if (value !== undefined) {
+          url.searchParams.set(key, String(value));
+        }
       }
       const response = await http({
         method: 'GET',

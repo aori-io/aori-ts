@@ -1,5 +1,5 @@
-import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketCallbacks, SubscriptionParams } from './types';
-import { fetchAllChains, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder } from './helpers';
+import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, DomainInfo, TokenInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketCallbacks, SubscriptionParams } from './types';
+import { fetchAllChains, getDomain, fetchAllTokens, getTokens, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder } from './helpers';
 import {
   AORI_API,
   AORI_WS_API
@@ -11,6 +11,8 @@ import {
 export class Aori {
   // General
   public chains: Record<string, ChainInfo> = {};
+  public domain: DomainInfo | null = null;
+  public tokens: TokenInfo[] = [];
   public apiBaseUrl: string = AORI_API;
   private apiKey?: string;
 
@@ -21,19 +23,26 @@ export class Aori {
   /**
    * Creates a new Aori instance
    * @param chains The list of supported chains and their configurations
-   * @param baseUrl The base URL of the API
+   * @param domain The domain information for EIP-712 typed data signing
+   * @param apiBaseUrl The base URL of the API
+   * @param wsBaseUrl The base URL of the WebSocket API
    * @param apiKey Optional API key for authentication
+   * @param tokens Optional list of tokens
    */
   private constructor(
     chains: Record<string, ChainInfo>,
+    domain: DomainInfo,
     apiBaseUrl: string = AORI_API,
     wsBaseUrl: string = AORI_WS_API,
-    apiKey?: string
+    apiKey?: string,
+    tokens: TokenInfo[] = []
   ) {
     this.apiBaseUrl = apiBaseUrl;
     this.wsBaseUrl = wsBaseUrl.replace(/^http/, 'ws');
     this.apiKey = apiKey;
     this.chains = chains;
+    this.domain = domain;
+    this.tokens = tokens;
   }
 
   /**
@@ -41,12 +50,28 @@ export class Aori {
    * @param apiBaseUrl The base URL of the API
    * @param wsBaseUrl The base URL of the WebSocket API
    * @param apiKey Optional API key for authentication
-   * @param wsOptions Optional WebSocket options
+   * @param loadTokens Optional boolean to load all tokens during initialization. Default: false
    * @returns A promise that resolves with the Aori instance
    */
-  public static async create(apiBaseUrl: string = AORI_API, wsBaseUrl: string = AORI_WS_API, apiKey?: string) {
-    const chains = await fetchAllChains(apiBaseUrl, apiKey);
-    return new Aori(chains, apiBaseUrl, wsBaseUrl, apiKey);
+  public static async create(
+    apiBaseUrl: string = AORI_API, 
+    wsBaseUrl: string = AORI_WS_API, 
+    apiKey?: string,
+    loadTokens?: boolean
+  ) {
+    // Always fetch chains and domain
+    const [chains, domain] = await Promise.all([
+      fetchAllChains(apiBaseUrl, apiKey),
+      getDomain(apiBaseUrl, apiKey)
+    ]);
+
+    // Conditionally fetch all tokens
+    let tokens: TokenInfo[] = [];
+    if (loadTokens === true) {
+      tokens = await fetchAllTokens(apiBaseUrl, apiKey);
+    }
+
+    return new Aori(chains, domain, apiBaseUrl, wsBaseUrl, apiKey, tokens);
   }
 
   /**
@@ -80,6 +105,55 @@ export class Aori {
   }
 
   /**
+   * Returns the cached domain information needed for EIP-712 typed data signing
+   * @returns The domain information containing name, version, and type strings
+   */
+  public getDomain(): DomainInfo | null {
+    return this.domain;
+  }
+
+  /**
+   * Loads tokens into the cache from the API
+   * @param chain Optional chain identifier to filter by - can be either chainId (number) or chainKey (string)
+   * @param options Optional parameters including AbortSignal
+   * @returns A promise that resolves when tokens are loaded
+   */
+  public async loadTokens(chain?: string | number, options: { signal?: AbortSignal } = {}): Promise<void> {
+    this.tokens = await fetchAllTokens(this.apiBaseUrl, this.apiKey, { signal: options.signal, chain });
+  }
+
+  /**
+   * Returns all cached tokens
+   * @returns An array of all cached TokenInfo objects
+   */
+  public getAllTokens(): TokenInfo[] {
+    return this.tokens;
+  }
+
+  /**
+   * Returns tokens for a specific chain from the cache
+   * @param chain The chain identifier - can be either chainId (number) or chainKey (string)
+   * @returns An array of tokens for the specified chain
+   */
+  public getTokens(chain: string | number): TokenInfo[] {
+    if (typeof chain === 'string') {
+      return this.tokens.filter(token => token.chainKey.toLowerCase() === chain.toLowerCase());
+    } else {
+      return this.tokens.filter(token => token.chainId === chain);
+    }
+  }
+
+  /**
+   * Fetches tokens for a specific chain from the API (bypasses cache)
+   * @param chain The chain identifier - can be either chainId (number) or chainKey (string)
+   * @param options Optional parameters including AbortSignal
+   * @returns An array of tokens for the specified chain
+   */
+  public async fetchTokens(chain: string | number, options: { signal?: AbortSignal } = {}): Promise<TokenInfo[]> {
+    return await getTokens(chain, this.apiBaseUrl, this.apiKey, options);
+  }
+
+  /**
    * Signs an order using EIP-712 typed data format
    * @param quoteResponse The quote response containing order details
    * @param signer The wallet client that can sign typed data
@@ -107,7 +181,8 @@ export class Aori {
       this.apiBaseUrl, 
       this.apiKey,
       inputChain,
-      outputChain
+      outputChain,
+      this.domain ?? undefined
     );
   }
 
@@ -169,7 +244,17 @@ export class Aori {
    */
   public disconnect(): void {
     if (this.ws) {
-      this.ws.close();
+      // Remove event listeners to prevent memory leaks
+      this.ws.onopen = null;
+      this.ws.onmessage = null;
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      
+      // Close connection if still open
+      if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
+        this.ws.close();
+      }
+      
       this.ws = null;
     }
   }

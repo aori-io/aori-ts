@@ -1,0 +1,62 @@
+{
+  "name": "aori-sdk-showcase",
+  "version": "1.0.0",
+  "description": "A comprehensive Next.js application showcasing all features of the Aori TypeScript SDK",
+  "private": true,
+  "keywords": [
+    "aori",
+    "cross-chain",
+    "defi",
+    "swap",
+    "nextjs",
+    "typescript",
+    "websocket",
+    "sdk"
+  ],
+  "author": "Aori",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "setup": "node setup.js",
+    "clean": "rm -rf .next out node_modules package-lock.json && npm install",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@reown/appkit": "^1.0.0",
+    "@reown/appkit-adapter-wagmi": "^1.0.0",
+    "@tanstack/react-query": "^5.0.0",
+    "ethers": "^6.8.0",
+    "next": "15.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "viem": "^2.0.0",
+    "wagmi": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "autoprefixer": "^10.0.0",
+    "eslint": "^8.0.0",
+    "eslint-config-next": "15.0.0",
+    "postcss": "^8.0.0",
+    "tailwindcss": "^3.0.0",
+    "ts-loader": "^9.5.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aori-io/aori-sdk-showcase"
+  },
+  "bugs": {
+    "url": "https://github.com/aori-io/aori-sdk-showcase/issues"
+  },
+  "homepage": "https://github.com/aori-io/aori-sdk-showcase#readme"
+} 

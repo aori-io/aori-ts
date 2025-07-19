@@ -4,7 +4,7 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 2020,
     sourceType: 'module',
-    project: './tsconfig.json'
+    project: ['./tsconfig.json', './tsconfig.test.json']
   },
   plugins: ['@typescript-eslint'],
   root: true,
@@ -14,7 +14,7 @@ module.exports = {
     es6: true,
     browser: true
   },
-  ignorePatterns: ['.eslintrc.js', 'dist/', 'coverage/', 'node_modules/'],
+  ignorePatterns: ['.eslintrc.js', 'dist/', 'coverage/', 'node_modules/', 'examples/'],
   rules: {
     'prefer-const': 'error',
     'no-var': 'error',

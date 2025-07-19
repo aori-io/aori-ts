@@ -79,6 +79,28 @@ export interface ChainInfo {
     address: string;
 }
 
+//========================================================
+//                Domain Info Interface
+//========================================================
+
+export interface DomainInfo {
+    domainTypeString: string;
+    name: string;
+    orderTypeString: string;
+    version: string;
+}
+
+//========================================================
+//                Token Info Interface
+//========================================================
+
+export interface TokenInfo {
+    symbol: string;
+    address: string;
+    chainId: number;
+    chainKey: string;
+}
+
 //============================================
 //          Order Status Interfaces
 //=============================================
