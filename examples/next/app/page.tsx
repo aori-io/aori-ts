@@ -7,14 +7,16 @@ import {
   type QuoteRequest,
   type SwapRequest,
   type QuoteResponse,
-  type OrderStatus,
   type SubscriptionParams,
   type WebSocketCallbacks,
   type ChainInfo,
-  type TokenInfo
+  type TokenInfo,
+  type NativeDepositExecutor,
+  type TransactionRequest,
+  NATIVE_TOKEN_ADDRESS
 } from '@aori/aori-ts'
-import { type Address, erc20Abi, parseUnits, maxUint256 } from 'viem'
-import { signTypedData, readContract, writeContract, waitForTransactionReceipt } from 'viem/actions'
+import { type Address, erc20Abi, parseUnits, maxUint256, parseEther } from 'viem'
+import { signTypedData, readContract, writeContract, waitForTransactionReceipt, sendTransaction, estimateGas } from 'viem/actions'
 
 type SwapFormData = {
   inputChain: string
@@ -24,11 +26,11 @@ type SwapFormData = {
   inputAmount: string
 }
 
-type SwapStatus = 'idle' | 'getting-quote' | 'checking-approval' | 'approving' | 'signing' | 'submitting' | 'completed' | 'error'
+type SwapStatus = 'idle' | 'getting-quote' | 'checking-approval' | 'approving' | 'signing' | 'submitting' | 'executing-native' | 'completed' | 'error'
 
 type ActivityItem = {
   id: string
-  type: 'swap' | 'quote' | 'websocket' | 'status' | 'initialization'
+  type: 'swap' | 'quote' | 'websocket' | 'status' | 'initialization' | 'native-deposit'
   status: string
   message: string
   timestamp: Date
@@ -273,8 +275,16 @@ export default function CryptoSwap() {
     return chains[chainKey]
   }
 
+  // Check if a token is a native token
+  const isNativeToken = (tokenAddress: string): boolean => {
+    return aori?.isNativeToken(tokenAddress) || false
+  }
+
   // Helper function to get token decimals (fallback for common tokens)
   const getTokenDecimals = (tokenInfo: TokenInfo): number => {
+    // For native tokens, always use 18 decimals
+    if (isNativeToken(tokenInfo.address)) return 18
+    
     // Common token decimals mapping
     const symbol = tokenInfo.symbol.toUpperCase()
     if (symbol === 'USDC' || symbol === 'USDT') return 6
@@ -282,6 +292,36 @@ export default function CryptoSwap() {
     if (symbol === 'WBTC') return 8
     // Default to 18 for unknown tokens
     return 18
+  }
+
+  // Create native deposit executor from wallet client
+  const createNativeDepositExecutor = (): NativeDepositExecutor | null => {
+    if (!walletClient) return null
+
+    return {
+      sendTransaction: async (request: TransactionRequest) => {
+        const hash = await sendTransaction(walletClient, {
+          to: request.to as Address,
+          data: request.data as `0x${string}`,
+          value: BigInt(request.value),
+          gas: request.gasLimit ? BigInt(request.gasLimit) : undefined,
+        })
+
+        return {
+          hash,
+          wait: async () => {
+            return await waitForTransactionReceipt(walletClient, { hash })
+          }
+        }
+      },
+      estimateGas: async (request: TransactionRequest) => {
+        return await estimateGas(walletClient, {
+          to: request.to as Address,
+          data: request.data as `0x${string}`,
+          value: BigInt(request.value),
+        })
+      }
+    }
   }
 
   const handleInputChange = (field: keyof SwapFormData, value: string) => {
@@ -498,33 +538,59 @@ export default function CryptoSwap() {
       const outputAmount = (BigInt(quoteResponse.outputAmount) * BigInt(10 ** 6)) / BigInt(10 ** getTokenDecimals(outputTokenInfo))
       const outputAmountFormatted = (Number(outputAmount) / 10 ** 6).toFixed(6)
       
-      setStatusMessage(`Quote received: ${outputAmountFormatted} ${outputTokenInfo.symbol}`)
-      setStatus('idle')
+      // Check if this is a native token deposit
+      const isNativeDeposit = aori.isNativeDeposit(quoteResponse)
       
-      addActivity({
-        type: 'quote',
-        status: 'received',
-        message: `Quote: ${formData.inputAmount} ${inputTokenInfo.symbol} → ${outputAmountFormatted} ${outputTokenInfo.symbol}`,
-        timestamp: new Date(),
-        details: {
-          inputChain: formData.inputChain,
-          outputChain: formData.outputChain,
-          inputAmount: inputAmountWei,
-          outputAmount: quoteResponse.outputAmount,
-          inputToken: inputTokenInfo.symbol,
-          outputToken: outputTokenInfo.symbol
-        }
-      })
+      if (isNativeDeposit) {
+        setStatusMessage(`Quote received (Native Deposit): ${outputAmountFormatted} ${outputTokenInfo.symbol}`)
+        setApprovalStatus({ isApproved: true, allowance: 'N/A', checking: false }) // Native tokens don't need approval
+        
+        addActivity({
+          type: 'quote',
+          status: 'received',
+          message: `Native deposit quote: ${formData.inputAmount} ETH → ${outputAmountFormatted} ${outputTokenInfo.symbol}`,
+          timestamp: new Date(),
+          details: {
+            isNativeDeposit: true,
+            inputChain: formData.inputChain,
+            outputChain: formData.outputChain,
+            inputAmount: inputAmountWei,
+            outputAmount: quoteResponse.outputAmount,
+            inputToken: inputTokenInfo.symbol,
+            outputToken: outputTokenInfo.symbol
+          }
+        })
+      } else {
+        setStatusMessage(`Quote received: ${outputAmountFormatted} ${outputTokenInfo.symbol}`)
+        
+        addActivity({
+          type: 'quote',
+          status: 'received',
+          message: `Quote: ${formData.inputAmount} ${inputTokenInfo.symbol} → ${outputAmountFormatted} ${outputTokenInfo.symbol}`,
+          timestamp: new Date(),
+          details: {
+            isNativeDeposit: false,
+            inputChain: formData.inputChain,
+            outputChain: formData.outputChain,
+            inputAmount: inputAmountWei,
+            outputAmount: quoteResponse.outputAmount,
+            inputToken: inputTokenInfo.symbol,
+            outputToken: outputTokenInfo.symbol
+          }
+        })
 
-      // Check token approval after receiving quote  
-      const inputChainInfo = getChainInfo(formData.inputChain)
-      if (inputChainInfo) {
-        await checkTokenApproval(
-          inputTokenInfo.address as Address,
-          inputChainInfo.address as Address,
-          inputAmountWei
-        )
+        // Check token approval for ERC20 tokens only
+        const inputChainInfo = getChainInfo(formData.inputChain)
+        if (inputChainInfo) {
+          await checkTokenApproval(
+            inputTokenInfo.address as Address,
+            inputChainInfo.address as Address,
+            inputAmountWei
+          )
+        }
       }
+      
+      setStatus('idle')
 
     } catch (error) {
       console.error('Quote failed:', error)
@@ -557,120 +623,188 @@ export default function CryptoSwap() {
     }
 
     try {
-      setStatus('checking-approval')
-      setStatusMessage('Checking token approval...')
-
+      const isNativeDeposit = aori.isNativeDeposit(quote)
       const inputAmountWei = parseUnits(formData.inputAmount, getTokenDecimals(inputTokenInfo)).toString()
-      
-      // Check current approval
-      const isApproved = await checkTokenApproval(
-        inputTokenInfo.address as Address,
-        inputChainInfo.address as Address,
-        inputAmountWei
-      )
 
-      // Request approval if needed
-      if (!isApproved) {
-        const approvalSuccess = await requestTokenApproval(
-          inputTokenInfo.address as Address,
-          inputChainInfo.address as Address
-        )
-        
-        if (!approvalSuccess) {
-          setStatus('error')
-          setStatusMessage('Token approval failed. Cannot proceed with swap.')
-          return
+      if (isNativeDeposit) {
+        // Native token swap flow
+        setStatus('executing-native')
+        setStatusMessage('Executing native token deposit...')
+
+        // Switch to input chain for native transaction
+        await switchChain({ chainId: inputChainInfo.chainId })
+
+        const executor = createNativeDepositExecutor()
+        if (!executor) {
+          throw new Error('Failed to create native deposit executor')
         }
-      }
 
-      setStatus('signing')
-      setStatusMessage('Please sign the transaction in your wallet...')
-
-      // Switch to input chain for signing
-      await switchChain({ chainId: inputChainInfo.chainId })
-
-      // Create adapted wallet client for viem compatibility
-      const adaptedWalletClient = {
-        signTypedData: async (params: any) => {
-          // Check if we need to switch chains based on the domain chainId
-          if (params.domain && params.domain.chainId) {
-            const typedDataChainId = Number(params.domain.chainId)
-            const currentChainId = walletClient.chain?.id
-            
-            if (currentChainId !== typedDataChainId) {
-              await switchChain({ chainId: typedDataChainId })
-              await new Promise(resolve => setTimeout(resolve, 1000))
-            }
+        addActivity({
+          type: 'native-deposit',
+          status: 'starting',
+          message: 'Starting native token deposit execution',
+          timestamp: new Date(),
+          details: {
+            inputAmount: inputAmountWei,
+            inputToken: 'ETH',
+            outputToken: outputTokenInfo.symbol
           }
+        })
 
-          return await signTypedData(walletClient, {
-            account: params.account as Address,
-            domain: params.domain,
-            types: params.types,
-            primaryType: params.primaryType,
-            message: params.message,
-          })
-        },
-      }
-
-      // Sign the order using the Aori instance
-      const result = await aori.signReadableOrder(
-        quote,
-        adaptedWalletClient,
-        address
-      )
-
-      setStatus('submitting')
-      setStatusMessage('Submitting swap...')
-
-      const swapRequest: SwapRequest = {
-        orderHash: result.orderHash,
-        signature: result.signature,
-      }
-
-      const swapResponse = await aori.submitSwap(swapRequest)
-      setOrderHash(swapResponse.orderHash)
-      
-      const outputAmount = (BigInt(quote.outputAmount) * BigInt(10 ** 6)) / BigInt(10 ** getTokenDecimals(outputTokenInfo))
-      const outputAmountFormatted = (Number(outputAmount) / 10 ** 6).toFixed(6)
-      
-      addActivity({
-        type: 'swap',
-        status: 'submitted',
-        message: `Swap submitted: ${formData.inputAmount} ${inputTokenInfo.symbol} → ${outputAmountFormatted} ${outputTokenInfo.symbol}`,
-        timestamp: new Date(),
-        orderHash: swapResponse.orderHash,
-        details: {
-          inputChain: formData.inputChain,
-          outputChain: formData.outputChain,
+        // Use the unified executeSwap method for native tokens
+        const quoteRequest: QuoteRequest = {
+          offerer: address,
+          recipient: address,
+          inputToken: inputTokenInfo.address,
+          outputToken: outputTokenInfo.address,
           inputAmount: inputAmountWei,
-          outputAmount: quote.outputAmount,
-          inputToken: inputTokenInfo.symbol,
-          outputToken: outputTokenInfo.symbol
+          inputChain: formData.inputChain,
+          outputChain: formData.outputChain
         }
-      })
 
-      // Monitor status using Aori instance
-      setStatusMessage('Monitoring swap status...')
-      
-      try {
-        const finalStatus = await aori.pollOrderStatus(swapResponse.orderHash)
+        const result = await aori.executeSwap(
+          quoteRequest,
+          { privateKey: '' }, // Empty signer for native deposits
+          executor
+        )
 
-        setStatus('completed')
-        const statusType = typeof finalStatus === 'object' && 'status' in finalStatus ? finalStatus.status : 'completed'
-        setStatusMessage(`Swap ${statusType}!`)
+        if ('txHash' in result) {
+          // Native transaction result
+          if (result.success) {
+            setStatus('completed')
+            setStatusMessage('Native deposit completed successfully!')
+            setOrderHash(result.txHash)
+
+            addActivity({
+              type: 'native-deposit',
+              status: 'completed',
+              message: `Native deposit completed: ${result.txHash}`,
+              timestamp: new Date(),
+              orderHash: result.txHash,
+              details: result
+            })
+          } else {
+            throw new Error(result.error || 'Native deposit failed')
+          }
+        } else {
+          throw new Error('Unexpected response type for native deposit')
+        }
+
+      } else {
+        // ERC20 token swap flow
+        setStatus('checking-approval')
+        setStatusMessage('Checking token approval...')
+
+        // Check current approval
+        const isApproved = await checkTokenApproval(
+          inputTokenInfo.address as Address,
+          inputChainInfo.address as Address,
+          inputAmountWei
+        )
+
+        // Request approval if needed
+        if (!isApproved) {
+          const approvalSuccess = await requestTokenApproval(
+            inputTokenInfo.address as Address,
+            inputChainInfo.address as Address
+          )
+          
+          if (!approvalSuccess) {
+            setStatus('error')
+            setStatusMessage('Token approval failed. Cannot proceed with swap.')
+            return
+          }
+        }
+
+        setStatus('signing')
+        setStatusMessage('Please sign the transaction in your wallet...')
+
+        // Switch to input chain for signing
+        await switchChain({ chainId: inputChainInfo.chainId })
+
+        // Create adapted wallet client for viem compatibility
+        const adaptedWalletClient = {
+          signTypedData: async (params: any) => {
+            // Check if we need to switch chains based on the domain chainId
+            if (params.domain && params.domain.chainId) {
+              const typedDataChainId = Number(params.domain.chainId)
+              const currentChainId = walletClient.chain?.id
+              
+              if (currentChainId !== typedDataChainId) {
+                await switchChain({ chainId: typedDataChainId })
+                await new Promise(resolve => setTimeout(resolve, 1000))
+              }
+            }
+
+            return await signTypedData(walletClient, {
+              account: params.account as Address,
+              domain: params.domain,
+              types: params.types,
+              primaryType: params.primaryType,
+              message: params.message,
+            })
+          },
+        }
+
+        // Sign the order using the Aori instance
+        const result = await aori.signReadableOrder(
+          quote,
+          adaptedWalletClient,
+          address
+        )
+
+        setStatus('submitting')
+        setStatusMessage('Submitting swap...')
+
+        const swapRequest: SwapRequest = {
+          orderHash: result.orderHash,
+          signature: result.signature,
+        }
+
+        const swapResponse = await aori.submitSwap(swapRequest)
+        setOrderHash(swapResponse.orderHash)
+        
+        const outputAmount = (BigInt(quote.outputAmount) * BigInt(10 ** 6)) / BigInt(10 ** getTokenDecimals(outputTokenInfo))
+        const outputAmountFormatted = (Number(outputAmount) / 10 ** 6).toFixed(6)
         
         addActivity({
           type: 'swap',
-          status: statusType,
-          message: `Swap ${statusType}: ${swapResponse.orderHash.slice(0, 10)}...`,
+          status: 'submitted',
+          message: `Swap submitted: ${formData.inputAmount} ${inputTokenInfo.symbol} → ${outputAmountFormatted} ${outputTokenInfo.symbol}`,
           timestamp: new Date(),
-          orderHash: swapResponse.orderHash
+          orderHash: swapResponse.orderHash,
+          details: {
+            inputChain: formData.inputChain,
+            outputChain: formData.outputChain,
+            inputAmount: inputAmountWei,
+            outputAmount: quote.outputAmount,
+            inputToken: inputTokenInfo.symbol,
+            outputToken: outputTokenInfo.symbol
+          }
         })
-      } catch (pollError) {
-        console.error('Status polling failed:', pollError)
-        setStatusMessage('Swap submitted, but status monitoring failed')
-        setStatus('completed')
+
+        // Monitor status using Aori instance
+        setStatusMessage('Monitoring swap status...')
+        
+        try {
+          const finalStatus = await aori.pollOrderStatus(swapResponse.orderHash)
+
+          setStatus('completed')
+          const statusType = typeof finalStatus === 'object' && 'status' in finalStatus ? finalStatus.status : 'completed'
+          setStatusMessage(`Swap ${statusType}!`)
+          
+          addActivity({
+            type: 'swap',
+            status: statusType,
+            message: `Swap ${statusType}: ${swapResponse.orderHash.slice(0, 10)}...`,
+            timestamp: new Date(),
+            orderHash: swapResponse.orderHash
+          })
+        } catch (pollError) {
+          console.error('Status polling failed:', pollError)
+          setStatusMessage('Swap submitted, but status monitoring failed')
+          setStatus('completed')
+        }
       }
 
       // Reset form
@@ -699,13 +833,17 @@ export default function CryptoSwap() {
     ? ((BigInt(quote.outputAmount) * BigInt(10 ** 6)) / BigInt(10 ** getTokenDecimals(outputTokenInfo)) / BigInt(10 ** 6)).toString()
     : ''
 
+  // Check if current selection is native token
+  const isInputTokenNative = inputTokenInfo ? isNativeToken(inputTokenInfo.address) : false
+  const isNativeDepositFlow = quote ? aori?.isNativeDeposit(quote) || false : false
+
   // Prevent hydration issues by not rendering until mounted
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-white p-4">
+      <div className="min-h-screen bg-zinc-900 p-4">
         <div className="max-w-6xl mx-auto">
           <div className="flex justify-center items-center min-h-[400px]">
-            <div className="text-gray-500">Loading...</div>
+            <div className="text-zinc-300">Loading...</div>
           </div>
         </div>
       </div>
@@ -715,19 +853,19 @@ export default function CryptoSwap() {
   // Show initialization state
   if (isInitializing || initError) {
     return (
-      <div className="min-h-screen bg-white p-4">
+      <div className="min-h-screen bg-zinc-900 p-4">
         <div className="max-w-6xl mx-auto">
           <div className="flex justify-center items-center min-h-[400px]">
             <div className="text-center">
               {isInitializing ? (
                 <>
-                  <div className="text-gray-500 mb-2">Initializing Aori SDK...</div>
-                  <div className="text-sm text-gray-400">Loading chains, tokens, and domain info</div>
+                  <div className="text-zinc-300 mb-2">Initializing Aori SDK...</div>
+                  <div className="text-sm text-zinc-400">Loading chains, tokens, and domain info</div>
                 </>
               ) : (
                 <>
-                  <div className="text-red-500 mb-2">Initialization Failed</div>
-                  <div className="text-sm text-gray-600">{initError}</div>
+                  <div className="text-red-400 mb-2">Initialization Failed</div>
+                  <div className="text-sm text-zinc-300">{initError}</div>
                 </>
               )}
             </div>
@@ -740,22 +878,27 @@ export default function CryptoSwap() {
   const chainKeys = Object.keys(chains)
 
   return (
-    <div className="min-h-screen bg-white p-4">
+    <div className="min-h-screen bg-zinc-900 p-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-black">Aori Cross-Chain Swap</h1>
+            <h1 className="text-2xl font-bold text-white">Aori Cross-Chain Swap</h1>
             <div className="flex items-center gap-4 mt-2">
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-zinc-300">
                 {wsConnected ? '🟢 WebSocket Connected' : '🔴 WebSocket Disconnected'}
               </div>
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-zinc-300">
                 {hasApiKey ? '🔑 API Key Active' : '🔓 No API Key'}
               </div>
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-zinc-300">
                 📊 {chainKeys.length} chains, {tokens.length} tokens
               </div>
+              {isInputTokenNative && (
+                <div className="text-sm text-orange-300">
+                  ⚡ Native Token Mode
+                </div>
+              )}
             </div>
           </div>
           <w3m-button />
@@ -764,13 +907,13 @@ export default function CryptoSwap() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Swap Interface */}
           <div className="space-y-6">
-            <div className="border-2 border-black bg-white shadow-sm">
+            <div className="border-2 border-zinc-600 bg-zinc-800/90 shadow-lg backdrop-blur-lg">
               <div className="p-6 pb-0 flex justify-between items-center">
-                <h2 className="text-lg font-semibold text-black">Cross-Chain Swap</h2>
+                <h2 className="text-lg font-semibold text-white">Cross-Chain Swap</h2>
                 {isConnected && (
                   <button
                     onClick={clearForm}
-                    className="text-sm px-3 py-1 text-black border border-black hover:bg-black hover:text-white transition-colors"
+                    className="text-sm px-3 py-1 text-zinc-300 border border-zinc-500 hover:bg-zinc-700 hover:text-white transition-colors"
                   >
                     Clear
                   </button>
@@ -779,7 +922,7 @@ export default function CryptoSwap() {
               
               {!isConnected ? (
                 <div className="p-6 text-center">
-                  <div className="text-gray-500 mb-4">
+                  <div className="text-zinc-400 mb-4">
                     <svg className="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                     </svg>
@@ -791,12 +934,12 @@ export default function CryptoSwap() {
                 <div className="p-6 space-y-4">
                   {/* From Token */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-black">From</label>
+                    <label className="text-sm font-medium text-zinc-200">From</label>
                     <div className="flex gap-2">
                       <select
                         value={formData.inputChain}
                         onChange={(e) => handleInputChange('inputChain', e.target.value)}
-                        className="w-32 px-3 py-2 border border-black bg-white text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                        className="w-32 px-3 py-2 border border-zinc-600 bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       >
                         {chainKeys.map((chainKey) => (
                           <option key={chainKey} value={chainKey}>
@@ -807,11 +950,11 @@ export default function CryptoSwap() {
                       <select
                         value={formData.inputToken}
                         onChange={(e) => handleInputChange('inputToken', e.target.value)}
-                        className="w-32 px-3 py-2 border border-black bg-white text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                        className="w-32 px-3 py-2 border border-zinc-600 bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       >
-                        {getTokensByChain(formData.inputChain).map(token => (
-                          <option key={token.address} value={token.address}>
-                            {token.symbol}
+                        {getTokensByChain(formData.inputChain).map((token, index) => (
+                          <option key={`input-${formData.inputChain}-${index}-${token.address}`} value={token.address}>
+                            {isNativeToken(token.address) ? '⚡ ETH (Native)' : token.symbol}
                           </option>
                         ))}
                       </select>
@@ -820,16 +963,21 @@ export default function CryptoSwap() {
                         placeholder="0.0"
                         value={formData.inputAmount}
                         onChange={(e) => handleInputChange('inputAmount', e.target.value)}
-                        className="flex-1 px-3 py-2 border border-black bg-white text-black placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                        className="flex-1 px-3 py-2 border border-zinc-600 bg-zinc-700 text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       />
                     </div>
+                    {isInputTokenNative && (
+                      <div className="text-xs text-orange-300 bg-orange-900/20 border border-orange-600 p-2">
+                        ⚡ Native token selected - no approval required, direct transaction execution
+                      </div>
+                    )}
                   </div>
 
                   {/* Swap Button */}
                   <div className="flex justify-center">
                     <button
                       onClick={swapTokens}
-                      className="p-2 border border-black bg-white text-black hover:bg-black hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2"
+                      className="p-2 border border-zinc-600 bg-zinc-700 text-zinc-300 hover:bg-zinc-600 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
@@ -844,12 +992,12 @@ export default function CryptoSwap() {
 
                   {/* To Token */}
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-black">To</label>
+                    <label className="text-sm font-medium text-zinc-200">To</label>
                     <div className="flex gap-2">
                       <select
                         value={formData.outputChain}
                         onChange={(e) => handleInputChange('outputChain', e.target.value)}
-                        className="w-32 px-3 py-2 border border-black bg-white text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                        className="w-32 px-3 py-2 border border-zinc-600 bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       >
                         {chainKeys.map((chainKey) => (
                           <option key={chainKey} value={chainKey}>
@@ -860,11 +1008,11 @@ export default function CryptoSwap() {
                       <select
                         value={formData.outputToken}
                         onChange={(e) => handleInputChange('outputToken', e.target.value)}
-                        className="w-32 px-3 py-2 border border-black bg-white text-black focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                        className="w-32 px-3 py-2 border border-zinc-600 bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       >
                         {getTokensByChain(formData.outputChain).map(token => (
-                          <option key={token.address} value={token.address}>
-                            {token.symbol}
+                          <option key={`output-${formData.outputChain}-${token.address}`} value={token.address}>
+                            {isNativeToken(token.address) ? '⚡ ETH (Native)' : token.symbol}
                           </option>
                         ))}
                       </select>
@@ -873,20 +1021,25 @@ export default function CryptoSwap() {
                         placeholder="0.0"
                         value={outputAmount}
                         readOnly
-                        className="flex-1 px-3 py-2 border border-black bg-gray-50 text-black placeholder-gray-500 focus:outline-none"
+                        className="flex-1 px-3 py-2 border border-zinc-600 bg-zinc-800 text-white placeholder-zinc-400 focus:outline-none"
                       />
                     </div>
                   </div>
 
                   {/* Quote Display */}
                   {quote && inputTokenInfo && outputTokenInfo && (
-                    <div className="p-3 border border-black bg-gray-50">
-                      <p className="text-sm text-black">
+                    <div className={`p-3 border ${isNativeDepositFlow ? 'border-orange-500 bg-orange-900/20' : 'border-zinc-600 bg-zinc-800'}`}>
+                      <p className="text-sm text-zinc-200">
                         Rate: 1 {inputTokenInfo.symbol} ({formData.inputChain}) = {outputAmount && formData.inputAmount ? (parseFloat(outputAmount) / parseFloat(formData.inputAmount)).toFixed(6) : '0'} {outputTokenInfo.symbol} ({formData.outputChain})
                       </p>
                       {quote.estimatedTime && (
-                        <p className="text-xs text-gray-600 mt-1">
+                        <p className="text-xs text-zinc-400 mt-1">
                           Estimated time: {quote.estimatedTime}ms
+                        </p>
+                      )}
+                      {isNativeDepositFlow && (
+                        <p className="text-xs text-orange-300 mt-1">
+                          ⚡ Native token deposit - transaction will be executed directly
                         </p>
                       )}
                     </div>
@@ -895,9 +1048,10 @@ export default function CryptoSwap() {
                   {/* Status Message */}
                   {statusMessage && (
                     <div className={`p-3 border ${
-                      status === 'error' ? 'border-red-400 bg-red-50 text-red-800' :
-                      status === 'completed' ? 'border-green-400 bg-green-50 text-green-800' :
-                      'border-blue-400 bg-blue-50 text-blue-800'
+                      status === 'error' ? 'border-red-500 bg-red-900/20 text-red-300' :
+                      status === 'completed' ? 'border-green-500 bg-green-900/20 text-green-300' :
+                      status === 'executing-native' ? 'border-orange-500 bg-orange-900/20 text-orange-300' :
+                      'border-blue-500 bg-blue-900/20 text-blue-300'
                     }`}>
                       <p className="text-sm">{statusMessage}</p>
                     </div>
@@ -905,35 +1059,47 @@ export default function CryptoSwap() {
 
                   {/* Order Hash */}
                   {orderHash && (
-                    <div className="p-3 border border-black bg-gray-50">
-                      <p className="text-xs text-black">
-                        <strong>Order Hash:</strong><br />
+                    <div className="p-3 border border-zinc-600 bg-zinc-800">
+                      <p className="text-xs text-zinc-200">
+                        <strong>{isNativeDepositFlow ? 'Transaction Hash:' : 'Order Hash:'}</strong><br />
                         <code className="text-xs break-all">{orderHash}</code>
                       </p>
                     </div>
                   )}
 
                   {/* Approval Status */}
-                  {quote && (
+                  {quote && !isNativeDepositFlow && (
                     <div className={`p-3 border ${
-                      approvalStatus.isApproved ? 'border-green-400 bg-green-50' :
-                      approvalStatus.checking ? 'border-blue-400 bg-blue-50' :
-                      'border-yellow-400 bg-yellow-50'
+                      approvalStatus.isApproved ? 'border-green-500 bg-green-900/20' :
+                      approvalStatus.checking ? 'border-blue-500 bg-blue-900/20' :
+                      'border-yellow-500 bg-yellow-900/20'
                     }`}>
                       <p className="text-sm font-medium">
                         {approvalStatus.checking ? (
-                          <span className="text-blue-800">🔍 Checking token approval...</span>
+                          <span className="text-blue-300">🔍 Checking token approval...</span>
                         ) : approvalStatus.isApproved ? (
-                          <span className="text-green-800">✅ Token approved for spending</span>
+                          <span className="text-green-300">✅ Token approved for spending</span>
                         ) : (
-                          <span className="text-yellow-800">⚠️ Token approval required</span>
+                          <span className="text-yellow-300">⚠️ Token approval required</span>
                         )}
                       </p>
                       {approvalStatus.allowance !== '0' && !approvalStatus.checking && (
-                        <p className="text-xs text-gray-600 mt-1">
+                        <p className="text-xs text-zinc-400 mt-1">
                           Current allowance: {approvalStatus.allowance}
                         </p>
                       )}
+                    </div>
+                  )}
+
+                  {/* Native Token Status */}
+                  {quote && isNativeDepositFlow && (
+                    <div className="p-3 border border-orange-500 bg-orange-900/20">
+                      <p className="text-sm font-medium">
+                        <span className="text-orange-300">⚡ Native token deposit ready - no approval needed</span>
+                      </p>
+                      <p className="text-xs text-orange-300 mt-1">
+                        Transaction will be executed directly from your wallet
+                      </p>
                     </div>
                   )}
 
@@ -942,20 +1108,24 @@ export default function CryptoSwap() {
                     <button
                       onClick={handleGetQuote}
                       disabled={!formData.inputToken || !formData.outputToken || !formData.inputAmount || isLoading}
-                      className="flex-1 px-4 py-2 bg-black text-white hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2"
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
                     >
                       {status === 'getting-quote' ? "Getting Quote..." : "Get Quote"}
                     </button>
                     <button
                       onClick={handleSwap}
                       disabled={!quote || isLoading}
-                      className="flex-1 px-4 py-2 border border-black bg-white text-black hover:bg-black hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2"
+                      className={`flex-1 px-4 py-2 border border-zinc-600 text-white hover:bg-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 ${
+                        isNativeDepositFlow ? 'bg-orange-600 hover:bg-orange-700' : 'bg-zinc-700'
+                      }`}
                     >
                       {status === 'checking-approval' ? "Checking Approval..." :
                        status === 'approving' ? "Approving Token..." :
                        status === 'signing' ? "Sign Transaction..." :
                        status === 'submitting' ? "Submitting..." :
-                       isLoading ? "Processing..." : "Swap"}
+                       status === 'executing-native' ? "Executing Native Deposit..." :
+                       isLoading ? "Processing..." : 
+                       isNativeDepositFlow ? "⚡ Execute Native Deposit" : "Swap"}
                     </button>
                   </div>
                 </div>
@@ -965,12 +1135,12 @@ export default function CryptoSwap() {
 
           {/* Activity Feed */}
           <div className="space-y-6">
-            <div className="border-2 border-black bg-white shadow-sm h-[600px]">
+            <div className="border-2 border-zinc-600 bg-zinc-800/90 shadow-lg backdrop-blur-lg h-[600px]">
               <div className="p-6 pb-0 flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-black">Activity Feed ({activity.length})</h3>
+                <h3 className="text-lg font-semibold text-white">Activity Feed ({activity.length})</h3>
                 <button
                   onClick={() => setActivity([])}
-                  className="text-sm px-3 py-1 text-black border border-black hover:bg-black hover:text-white transition-colors"
+                  className="text-sm px-3 py-1 text-zinc-300 border border-zinc-500 hover:bg-zinc-700 hover:text-white transition-colors"
                 >
                   Clear
                 </button>
@@ -978,35 +1148,36 @@ export default function CryptoSwap() {
               <div className="p-6">
                 <div className="h-[500px] overflow-y-auto space-y-2 font-mono text-xs">
                   {activity.map((item) => (
-                    <div key={item.id} className="p-3 border border-gray-300 bg-gray-50">
+                    <div key={item.id} className="p-3 border border-zinc-600 bg-zinc-800">
                       <div className="flex justify-between items-start mb-2">
                         <span className={`font-semibold ${
-                          item.status === 'error' ? 'text-red-600' :
-                          item.status === 'completed' || item.status === 'received' || item.status === 'connected' ? 'text-green-600' :
-                          item.status === 'starting' || item.status === 'pending' ? 'text-blue-600' :
-                          'text-gray-800'
+                          item.status === 'error' ? 'text-red-400' :
+                          item.status === 'completed' || item.status === 'received' || item.status === 'connected' ? 'text-green-400' :
+                          item.status === 'starting' || item.status === 'pending' ? 'text-blue-400' :
+                          item.type === 'native-deposit' ? 'text-orange-400' :
+                          'text-zinc-300'
                         }`}>
                           {item.type.toUpperCase()} - {item.status.toUpperCase()}
                         </span>
-                        <span className="text-gray-500 text-xs">
+                        <span className="text-zinc-400 text-xs">
                           {item.timestamp.toLocaleTimeString()}
                         </span>
                       </div>
-                      <div className="text-black mb-2">{item.message}</div>
+                      <div className="text-zinc-200 mb-2">{item.message}</div>
                       {item.orderHash && (
-                        <div className="text-gray-600 text-xs">
+                        <div className="text-zinc-400 text-xs">
                           Hash: {item.orderHash.slice(0, 10)}...{item.orderHash.slice(-6)}
                         </div>
                       )}
                       {item.details && (
-                        <pre className="text-xs text-gray-600 mt-2 whitespace-pre-wrap max-h-32 overflow-y-auto">
+                        <pre className="text-xs text-zinc-400 mt-2 whitespace-pre-wrap max-h-32 overflow-y-auto">
                           {JSON.stringify(item.details, null, 2)}
                         </pre>
                       )}
                     </div>
                   ))}
                   {activity.length === 0 && (
-                    <div className="text-center text-gray-500 mt-8">
+                    <div className="text-center text-zinc-400 mt-8">
                       No activity yet. Connect your wallet and execute a swap to see updates.
                       {!hasApiKey && (
                         <div className="mt-2 text-xs">
