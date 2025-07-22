@@ -4,3 +4,9 @@
 
 export const AORI_WS_API: string = "wss://api.aori.io";
 export const AORI_API: string = "https://api.aori.io";
+
+//////////////////////////////////////////////////////////////*/
+//                        NATIVE TOKENS
+//////////////////////////////////////////////////////////////*/
+
+export const NATIVE_TOKEN_ADDRESS: string = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";

@@ -1,8 +1,9 @@
-import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, DomainInfo, TokenInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketCallbacks, SubscriptionParams } from './types';
-import { fetchAllChains, getDomain, fetchAllTokens, getTokens, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder } from './helpers';
+import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, DomainInfo, TokenInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketCallbacks, SubscriptionParams, TransactionResponse, NativeDepositExecutor, NativeSwapResponse, ERC20SwapResponse } from './types';
+import { fetchAllChains, getDomain, fetchAllTokens, getTokens, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder, isNativeToken, isNativeDeposit, executeNativeDeposit, constructNativeDepositTransaction, isNativeSwapResponse, isERC20SwapResponse } from './helpers';
 import {
   AORI_API,
-  AORI_WS_API
+  AORI_WS_API,
+  NATIVE_TOKEN_ADDRESS
 } from './constants';
 
 /**
@@ -335,6 +336,168 @@ export class Aori {
    */
   public async queryOrders(params: QueryOrdersParams, options: { signal?: AbortSignal } = {}) {
     return await queryOrders(this.apiBaseUrl, params, this.apiKey, options);
+  }
+
+  //////////////////////////////////////////////////////////
+  //                NATIVE TOKEN UTILITIES
+  //////////////////////////////////////////////////////////
+
+  /**
+   * Checks if a token address represents a native token (ETH)
+   * @param tokenAddress The token address to check
+   * @returns True if the address represents a native token
+   */
+  public isNativeToken(tokenAddress: string): boolean {
+    return isNativeToken(tokenAddress);
+  }
+
+  /**
+   * Gets the native token address constant
+   * @returns The native token address
+   */
+  public getNativeTokenAddress(): string {
+    return NATIVE_TOKEN_ADDRESS;
+  }
+
+  /**
+   * Checks if a quote response indicates a native token deposit
+   * @param quoteResponse The quote response to check
+   * @returns True if this is a native token deposit
+   */
+  public isNativeDeposit(quoteResponse: QuoteResponse): boolean {
+    return isNativeDeposit(quoteResponse);
+  }
+
+  /**
+   * Executes a native token deposit transaction
+   * @param nativeResponse The native swap response containing transaction data
+   * @param executor The wallet/provider that can execute transactions
+   * @param gasLimit Optional gas limit override
+   * @returns Transaction response with hash and success status
+   */
+  public async executeNativeDeposit(
+    nativeResponse: NativeSwapResponse,
+    executor: NativeDepositExecutor,
+    gasLimit?: string
+  ): Promise<TransactionResponse> {
+    return await executeNativeDeposit(nativeResponse, executor, gasLimit);
+  }
+
+  /**
+   * Constructs a transaction request from a native swap response
+   * @param nativeResponse The native swap response
+   * @param gasLimit Optional gas limit override
+   * @returns Transaction request ready for execution
+   */
+  public constructNativeDepositTransaction(
+    nativeResponse: NativeSwapResponse,
+    gasLimit?: string
+  ) {
+    return constructNativeDepositTransaction(nativeResponse, gasLimit);
+  }
+
+  /**
+   * Complete native token swap flow - gets quote, signs, submits, and executes transaction
+   * @param request The quote request for native token
+   * @param signer The signer for order signing (can be empty for native)
+   * @param executor The wallet/provider that can execute transactions
+   * @param gasLimit Optional gas limit override
+   * @param options Optional parameters including AbortSignal
+   * @returns Transaction response with hash and success status
+   */
+  public async executeNativeSwap(
+    request: QuoteRequest,
+    signer: SignerType | null,
+    executor: NativeDepositExecutor,
+    gasLimit?: string,
+    options: { signal?: AbortSignal } = {}
+  ): Promise<TransactionResponse> {
+    try {
+      // Validate that input token is native
+      if (!this.isNativeToken(request.inputToken)) {
+        throw new Error(`Input token must be native token (${NATIVE_TOKEN_ADDRESS}) for native swaps`);
+      }
+
+      // 1. Get quote
+      const quote = await this.getQuote(request, options);
+
+      // 2. Validate it's a native deposit
+      if (!this.isNativeDeposit(quote)) {
+        throw new Error("Quote response indicates ERC20 deposit, not native deposit");
+      }
+
+      // 3. Sign order (will return empty string for native)
+      let signature = "";
+      if (signer) {
+        signature = await this.signOrder(quote, signer);
+      }
+
+      // 4. Submit swap
+      const swapResponse = await this.submitSwap(
+        {
+          orderHash: quote.orderHash,
+          signature
+        },
+        options
+      );
+
+      // 5. Validate response type
+      if (!isNativeSwapResponse(swapResponse)) {
+        throw new Error("Expected native_deposit response but received standard ERC20 response");
+      }
+
+      // 6. Execute native deposit transaction
+      return await this.executeNativeDeposit(swapResponse, executor, gasLimit);
+
+    } catch (error) {
+      return {
+        success: false,
+        txHash: "",
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Complete swap flow that handles both ERC20 and native tokens automatically
+   * @param request The quote request
+   * @param signer The signer for order signing
+   * @param executor Optional executor for native token transactions
+   * @param gasLimit Optional gas limit override for native transactions
+   * @param options Optional parameters including AbortSignal
+   * @returns Transaction response or swap response depending on token type
+   */
+  public async executeSwap(
+    request: QuoteRequest,
+    signer: SignerType,
+    executor?: NativeDepositExecutor,
+    gasLimit?: string,
+    options: { signal?: AbortSignal } = {}
+  ): Promise<TransactionResponse | { swapResponse: ERC20SwapResponse }> {
+    // Check if this is a native token swap
+    if (this.isNativeToken(request.inputToken)) {
+      if (!executor) {
+        throw new Error("Executor is required for native token swaps");
+      }
+      return await this.executeNativeSwap(request, signer, executor, gasLimit, options);
+    } else {
+      // Standard ERC20 flow
+      const quote = await this.getQuote(request, options);
+      const signature = await this.signOrder(quote, signer);
+      const swapResponse = await this.submitSwap(
+        {
+          orderHash: quote.orderHash,
+          signature
+        },
+        options
+      );
+
+      if (!isERC20SwapResponse(swapResponse)) {
+        throw new Error("Unexpected native token response for ERC20 swap request");
+      }
+
+      return { swapResponse };
+    }
   }
 }
 

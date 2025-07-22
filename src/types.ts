@@ -52,7 +52,8 @@ export interface SwapRequest {
     signature: string;
 }
 
-export interface SwapResponse {
+// Base interface for common swap response fields
+export interface SwapResponseBase {
     orderHash: string;
     offerer: string;
     recipient: string;
@@ -66,6 +67,60 @@ export interface SwapResponse {
     endTime: number;
     status: string;
     createdAt: number;
+}
+
+// ERC20 deposit response (standard flow)
+export interface ERC20SwapResponse extends SwapResponseBase {
+    // No additional fields - just the base response
+}
+
+// Native deposit response (requires user transaction execution)
+export interface NativeSwapResponse extends SwapResponseBase {
+    to: string;        // Contract address to call
+    data: string;      // Transaction calldata (hex encoded)
+    value: string;     // Native token amount (wei, same as inputAmount)
+}
+
+// Union type for swap responses - discriminated by presence of to/data/value fields
+export type SwapResponse = ERC20SwapResponse | NativeSwapResponse;
+
+// Legacy interface for backward compatibility (deprecated)
+export interface LegacySwapResponse {
+    orderHash: string;
+    offerer: string;
+    recipient: string;
+    inputToken: string;
+    outputToken: string;
+    inputAmount: string;
+    outputAmount: string;
+    inputChain: string;
+    outputChain: string;
+    startTime: number;
+    endTime: number;
+    status: string;
+    createdAt: number;
+}
+
+//========================================================
+//            Native Token Transaction Interfaces
+//========================================================
+
+export interface TransactionRequest {
+    to: string;
+    data: string;
+    value: string;
+    gasLimit?: string;
+}
+
+export interface TransactionResponse {
+    success: boolean;
+    txHash: string;
+    error?: string;
+}
+
+export interface NativeDepositExecutor {
+    sendTransaction(request: TransactionRequest): Promise<{ hash: string; wait(): Promise<any> }>;
+    estimateGas?(request: TransactionRequest): Promise<bigint>;
 }
 
 //========================================================
