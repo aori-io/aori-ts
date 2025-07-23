@@ -1010,8 +1010,8 @@ export default function CryptoSwap() {
                         onChange={(e) => handleInputChange('outputToken', e.target.value)}
                         className="w-32 px-3 py-2 border border-zinc-600 bg-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                       >
-                        {getTokensByChain(formData.outputChain).map(token => (
-                          <option key={`output-${formData.outputChain}-${token.address}`} value={token.address}>
+                        {getTokensByChain(formData.outputChain).map((token, index) => (
+                          <option key={`output-${formData.outputChain}-${index}-${token.address}`} value={token.address}>
                             {isNativeToken(token.address) ? '⚡ ETH (Native)' : token.symbol}
                           </option>
                         ))}
