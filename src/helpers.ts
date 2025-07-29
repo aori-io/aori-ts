@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import { AORI_API, NATIVE_TOKEN_ADDRESS } from './constants';
-import { ChainInfo, DomainInfo, TokenInfo, QuoteRequest, QuoteResponse, SignerType, SwapRequest, SwapResponse, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails, TransactionRequest, TransactionResponse, NativeDepositExecutor, NativeSwapResponse, ERC20SwapResponse } from './types';
+import { ChainInfo, DomainInfo, TokenInfo, QuoteRequest, QuoteResponse, ERC20QuoteResponse, NativeQuoteResponse, SignerType, SwapRequest, SwapResponse, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails, TransactionRequest, TransactionResponse, NativeSwapResponse, ERC20SwapResponse, SwapConfig, TxExecutor, Order } from './types';
 
 ////////////////////////////////////////////////////////////////*/
 //                      NATIVE TOKEN UTILITIES
@@ -16,12 +16,30 @@ export function isNativeToken(tokenAddress: string): boolean {
 }
 
 /**
- * Checks if a quote response indicates a native token deposit (empty signing hash)
- * @param quoteResponse The quote response to check
- * @returns True if this is a native token deposit
+ * Type guard to check if a quote response is for a native token swap
+ * @param response The quote response to check
+ * @returns True if this is a native token swap
  */
-export function isNativeDeposit(quoteResponse: QuoteResponse): boolean {
-  return quoteResponse.signingHash === "";
+export function isNativeQuoteResponse(response: QuoteResponse): response is NativeQuoteResponse {
+  return !('signingHash' in response);
+}
+
+/**
+ * Type guard to check if a quote response is for an ERC20 token swap
+ * @param response The quote response to check
+ * @returns True if this is an ERC20 token swap
+ */
+export function isERC20QuoteResponse(response: QuoteResponse): response is ERC20QuoteResponse {
+  return 'signingHash' in response;
+}
+
+/**
+ * Checks if a quote response indicates a native token swap (no signing hash required)
+ * @param quoteResponse The quote response to check
+ * @returns True if this is a native token swap
+ */
+export function isNativeSwap(quoteResponse: QuoteResponse): boolean {
+  return isNativeQuoteResponse(quoteResponse);
 }
 
 /**
@@ -46,18 +64,18 @@ export function isERC20SwapResponse(response: SwapResponse): response is ERC20Sw
 /**
  * Executes a native token deposit transaction
  * @param nativeResponse The native swap response containing transaction data
- * @param executor The wallet/provider that can execute transactions
+ * @param txExecutor The wallet/provider that can execute transactions
  * @param gasLimit Optional gas limit override
  * @returns Transaction response with hash and success status
  */
-export async function executeNativeDeposit(
+export async function executeNativeSwap(
   nativeResponse: NativeSwapResponse,
-  executor: NativeDepositExecutor,
+  txExecutor: TxExecutor,
   gasLimit?: string
 ): Promise<TransactionResponse> {
   try {
     // Validate the native response
-    validateNativeDepositResponse(nativeResponse);
+    validateNativeSwapResponse(nativeResponse);
 
     const transactionRequest: TransactionRequest = {
       to: nativeResponse.to,
@@ -67,11 +85,14 @@ export async function executeNativeDeposit(
     };
 
     // Estimate gas if not provided and estimateGas is available
-    if (!gasLimit && executor.estimateGas) {
+    if (!gasLimit && txExecutor.estimateGas) {
       try {
-        const estimatedGas = await executor.estimateGas(transactionRequest);
+        const estimatedGas = await txExecutor.estimateGas(transactionRequest);
         // Add 20% buffer to estimated gas
-        transactionRequest.gasLimit = (estimatedGas + (estimatedGas * 20n / 100n)).toString();
+        // Add 20% buffer to estimated gas
+        const bufferMultiplier = BigInt(120); // 120% = original + 20% buffer
+        const baseMultiplier = BigInt(100);
+        transactionRequest.gasLimit = (estimatedGas * bufferMultiplier / baseMultiplier).toString();
       } catch (error) {
         // If gas estimation fails, use a default
         transactionRequest.gasLimit = "200000";
@@ -79,7 +100,7 @@ export async function executeNativeDeposit(
     }
 
     // Execute the transaction
-    const tx = await executor.sendTransaction(transactionRequest);
+    const tx = await txExecutor.sendTransaction(transactionRequest);
     
     // Wait for transaction confirmation
     await tx.wait();
@@ -102,7 +123,7 @@ export async function executeNativeDeposit(
  * Validates a native deposit response to ensure all required fields are present
  * @param response The native swap response to validate
  */
-export function validateNativeDepositResponse(response: NativeSwapResponse): void {
+export function validateNativeSwapResponse(response: NativeSwapResponse): void {
   if (!response.to) {
     throw new Error("Native deposit response missing 'to' field");
   }
@@ -142,11 +163,11 @@ export function validateNativeDepositResponse(response: NativeSwapResponse): voi
  * @param gasLimit Optional gas limit override
  * @returns Transaction request ready for execution
  */
-export function constructNativeDepositTransaction(
+export function constructNativeSwapTransaction(
   nativeResponse: NativeSwapResponse,
   gasLimit?: string
 ): TransactionRequest {
-  validateNativeDepositResponse(nativeResponse);
+  validateNativeSwapResponse(nativeResponse);
   
   return {
     to: nativeResponse.to,
@@ -184,31 +205,6 @@ export function validateContractAddress(
 }
 
 /**
- * Validates that the user has sufficient native token balance
- * @param userBalance The user's current balance in wei
- * @param requiredAmount The required amount in wei
- * @param buffer Optional buffer percentage (default: 5%)
- */
-export function validateSufficientBalance(
-  userBalance: string | bigint,
-  requiredAmount: string | bigint,
-  buffer: number = 5
-): void {
-  const balance = typeof userBalance === 'string' ? BigInt(userBalance) : userBalance;
-  const required = typeof requiredAmount === 'string' ? BigInt(requiredAmount) : requiredAmount;
-  
-  // Add buffer for gas costs
-  const bufferAmount = (required * BigInt(buffer)) / 100n;
-  const totalRequired = required + bufferAmount;
-
-  if (balance < totalRequired) {
-    throw new Error(
-      `Insufficient balance. Required: ${totalRequired.toString()} wei (including ${buffer}% buffer), Available: ${balance.toString()} wei`
-    );
-  }
-}
-
-/**
  * Decodes and validates the transaction calldata to ensure it's a depositNative call
  * @param data The transaction calldata
  * @returns True if the data represents a valid depositNative call
@@ -240,35 +236,6 @@ export function validateDepositNativeCalldata(data: string): boolean {
   }
 }
 
-/**
- * Creates an error handler for common native token transaction errors
- * @param error The error object
- * @returns A user-friendly error message
- */
-export function handleNativeTokenError(error: any): string {
-  if (typeof error === 'string') {
-    return error;
-  }
-
-  if (error?.code) {
-    switch (error.code) {
-      case 'CALL_EXCEPTION':
-        return 'depositNative() transaction failed. Please check your balance and gas settings.';
-      case 'INSUFFICIENT_FUNDS':
-        return 'Insufficient funds to complete the transaction including gas fees.';
-      case 'UNPREDICTABLE_GAS_LIMIT':
-        return 'Unable to estimate gas for the transaction. Please try again or set a manual gas limit.';
-      case 'USER_REJECTED':
-        return 'Transaction was rejected by the user.';
-      case 'NETWORK_ERROR':
-        return 'Network error occurred. Please check your connection and try again.';
-      default:
-        return error.message || 'An unknown error occurred during the native token transaction.';
-    }
-  }
-
-  return error?.message || 'An unknown error occurred during the native token transaction.';
-}
 
 ////////////////////////////////////////////////////////////////*/
 //                      HELPER FUNCTIONS
@@ -561,9 +528,14 @@ export async function getChainByEid(
     quoteResponse: QuoteResponse,
     signer: SignerType
   ): Promise<string> {
-    // Check if this is a native deposit (empty signing hash)
-    if (isNativeDeposit(quoteResponse)) {
-      return ""; // No signature required for native deposits
+    // Check if this is a native swap (no signing hash)
+    if (isNativeSwap(quoteResponse)) {
+      return ""; // No signature required for native swaps
+    }
+
+    // At this point, we know it's an ERC20 swap with signingHash
+    if (!isERC20QuoteResponse(quoteResponse)) {
+      throw new Error("Signing hash is required for ERC20 swaps");
     }
 
     // Create signing key directly from private key
@@ -682,11 +654,11 @@ export async function getChainByEid(
     outputChain?: ChainInfo,
     domainInfo?: DomainInfo
   ): Promise<{ orderHash: string, signature: string }> {
-    // Check if this is a native deposit (empty signing hash)
-    if (isNativeDeposit(quoteResponse)) {
+    // Check if this is a native swap (no signing hash)
+    if (isNativeSwap(quoteResponse)) {
       return {
         orderHash: quoteResponse.orderHash,
-        signature: "" // No signature required for native deposits
+        signature: "" // No signature required for native swaps
       };
     }
 
@@ -811,6 +783,177 @@ export async function getChainByEid(
   }
   
   ////////////////////////////////////////////////////////////////*/
+  //                        EXECUTE SWAP 
+  //////////////////////////////////////////////////////////////*/
+  
+  /**
+   * Complete swap execution that automatically handles both ERC20 and native tokens
+   * @param quote The quote response from a previous getQuote call
+   * @param config Configuration object containing the appropriate parameters for each swap type
+   * @param baseUrl The base URL of the API
+   * @param apiKey Optional API key for authentication
+   * @param options Optional parameters including AbortSignal
+   * @returns TransactionResponse for native tokens (after execution) or SwapResponse for ERC20 tokens
+   */
+  export async function executeSwap(
+    quote: QuoteResponse,
+    config: SwapConfig,
+    baseUrl: string = AORI_API,
+    apiKey?: string,
+    { signal }: { signal?: AbortSignal } = {}
+  ): Promise<TransactionResponse | SwapResponse> {
+    try {
+      // Native token flow (no signature required)
+      if (config.type === 'native') {
+        // Validate that the input token is actually native
+        if (!isNativeToken(quote.inputToken)) {
+          throw new Error("Native swap config provided but input token is not native token");
+        }
+        
+        // Validate it's a native swap
+        if (!isNativeSwap(quote)) {
+          throw new Error("Quote response indicates ERC20 swap, not native token");
+        }
+        
+        // Submit swap with empty signature (native swaps don't require signatures)
+        const swapResponse = await submitSwap(
+          {
+            orderHash: quote.orderHash,
+            signature: "" // Empty signature for native swaps
+          },
+          baseUrl,
+          apiKey,
+          { signal }
+        );
+        
+        // Validate response type
+        if (!isNativeSwapResponse(swapResponse)) {
+          throw new Error("Expected native deposit response but received standard ERC20 response");
+        }
+        
+        // Execute the native deposit transaction
+        return await executeNativeSwap(swapResponse, config.txExecutor, config.gasLimit);
+        
+      } else {
+        // ERC20 token flow
+        // Validate that the input token is not native
+        if (isNativeToken(quote.inputToken)) {
+          throw new Error("ERC20 swap config provided but input token is native token");
+        }
+        
+        // Sign the order using EIP-712 typed data
+        const { signature } = await signReadableOrder(
+          quote,
+          config.signer,
+          config.userAddress,
+          baseUrl,
+          apiKey
+        );
+        
+        // Submit the swap request
+        const swapResponse = await submitSwap(
+          {
+            orderHash: quote.orderHash,
+            signature
+          },
+          baseUrl,
+          apiKey,
+          { signal }
+        );
+        
+        // Validate response type
+        if (!isERC20SwapResponse(swapResponse)) {
+          throw new Error("Unexpected native token response for ERC20 swap request");
+        }
+        
+        return swapResponse;
+      }
+      
+    } catch (error) {
+      // For native tokens, return a TransactionResponse format for consistency
+      if (config.type === 'native') {
+        return {
+          success: false,
+          txHash: "",
+          error: error instanceof Error ? error.message : String(error)
+        };
+      }
+      
+      // For ERC20 tokens, re-throw the error
+      throw error;
+    }
+    }
+
+  ////////////////////////////////////////////////////////////////*/
+  //                      ORDER UTILITIES
+  //////////////////////////////////////////////////////////////*/
+  
+  /**
+   * Converts a QuoteResponse, SwapResponse, or OrderDetails to a contract-compliant Order
+   * @param order The quote response, swap response, or order details to convert
+   * @param chains Optional chains object (if not provided, will fetch from API)
+   * @param baseUrl The base URL of the API (for fetching chains if not cached)
+   * @param apiKey Optional API key for authentication
+   * @returns The contract-compliant order struct
+   * 
+   * @example
+   * // Stateful usage (with cached chains)
+   * const order = await parseOrder(quote, aori.chains);
+   * const order = await parseOrder(swapResponse, aori.chains);
+   * const order = await parseOrder(orderDetails, aori.chains);
+   * 
+   * // Stateless usage (fetches chains from API)
+   * const order = await parseOrder(quote);
+   * const order = await parseOrder(swapResponse, undefined, customApiUrl, apiKey);
+   * const order = await parseOrder(orderDetails, undefined, customApiUrl, apiKey);
+   */
+  export async function parseOrder(
+    order: QuoteResponse | SwapResponse | OrderDetails,
+    chains?: Record<string, ChainInfo>,
+    baseUrl: string = AORI_API,
+    apiKey?: string
+  ): Promise<Order> {
+    let inputChain: ChainInfo;
+    let outputChain: ChainInfo;
+    
+    if (chains) {
+      // Use provided chains (stateful usage)
+      inputChain = chains[order.inputChain.toLowerCase()];
+      outputChain = chains[order.outputChain.toLowerCase()];
+      
+      if (!inputChain) {
+        throw new Error(`Input chain '${order.inputChain}' not found in provided chains`);
+      }
+      if (!outputChain) {
+        throw new Error(`Output chain '${order.outputChain}' not found in provided chains`);
+      }
+    } else {
+      // Fetch chains from API (stateless usage)
+      try {
+        [inputChain, outputChain] = await Promise.all([
+          getChain(order.inputChain, baseUrl, apiKey),
+          getChain(order.outputChain, baseUrl, apiKey)
+        ]);
+      } catch (error) {
+        throw new Error(`Failed to fetch chain information: ${error}`);
+      }
+    }
+    
+    return {
+      inputAmount: order.inputAmount,
+      outputAmount: order.outputAmount,
+      inputToken: order.inputToken,
+      outputToken: order.outputToken,
+      startTime: order.startTime,
+      endTime: order.endTime,
+      srcEid: inputChain.eid,
+      dstEid: outputChain.eid,
+      offerer: order.offerer,
+      recipient: order.recipient
+    };
+  }
+  
+    ////////////////////////////////////////////////////////////////*/
   //                   GET ORDER STATUS
   //////////////////////////////////////////////////////////////*/
   
@@ -936,6 +1079,26 @@ export async function getChainByEid(
     } catch (error) {
       throw new Error(`Failed to fetch order details: ${error}`);
     }
+  }
+
+  /**
+   * Fetches order details and converts them to a contract-compliant Order format
+   * @param orderHash The hash of the order to get
+   * @param chains Optional chains object (if not provided, will fetch from API)
+   * @param baseUrl The base URL of the API
+   * @param apiKey Optional API key for authentication
+   * @param options Optional parameters including AbortSignal
+   * @returns A promise that resolves with the contract-compliant order
+   */
+  export async function getOrder(
+    orderHash: string,
+    chains?: Record<string, ChainInfo>,
+    baseUrl: string = AORI_API,
+    apiKey?: string,
+    { signal }: { signal?: AbortSignal } = {}
+  ): Promise<Order> {
+    const orderDetails = await getOrderDetails(orderHash, baseUrl, apiKey, { signal });
+    return await parseOrder(orderDetails, chains, baseUrl, apiKey);
   }
   
   ////////////////////////////////////////////////////////////////*/

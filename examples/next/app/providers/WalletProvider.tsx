@@ -35,7 +35,7 @@ createAppKit({
 
 const queryClient = new QueryClient()
 
-export function AppKitProvider({ 
+export function WalletProvider({ 
   children 
 }: { 
   children: React.ReactNode 

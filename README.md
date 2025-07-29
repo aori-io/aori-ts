@@ -225,9 +225,11 @@ All the following functions support AbortSignal:
 
 - `getQuote(request, baseUrl, apiKey, { signal })`
 - `submitSwap(request, baseUrl, apiKey, { signal })`
+- `executeSwap(quote, config, baseUrl, apiKey, { signal })`
 - `getOrderStatus(orderHash, baseUrl, apiKey, { signal })`
 - `pollOrderStatus(orderHash, baseUrl, options, apiKey, { signal })`
 - `getOrderDetails(orderHash, baseUrl, apiKey, { signal })`
+- `getOrder(orderHash, chains, baseUrl, apiKey, { signal })`
 - `queryOrders(baseUrl, params, apiKey, { signal })`
 - `fetchAllChains(baseUrl, apiKey, { signal })`
 - `getDomain(baseUrl, apiKey, { signal })`
@@ -246,7 +248,9 @@ const aori = await Aori.create();
 
 // All instance methods support signal parameter
 const quote = await aori.getQuote(quoteRequest, { signal: AbortSignal.timeout(5000) });
+const swapResult = await aori.executeSwap(quote, config, { signal: controller.signal });
 const status = await aori.getOrderStatus(orderHash, { signal: controller.signal });
+const order = await aori.getOrder(orderHash, { signal: AbortSignal.timeout(3000) });
 
 // Token methods also support AbortSignal
 await aori.loadTokens('ethereum', { signal: AbortSignal.timeout(3000) });
@@ -593,21 +597,30 @@ await aori.loadTokens();            // Load all tokens
 | `signOrder` | Signs an order using the provided private key | `quoteResponse: QuoteResponse, signer: SignerType` | `Promise<string>` |
 | `signReadableOrder` | Signs an order using EIP-712 typed data | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string` | `Promise<{orderHash: string, signature: string}>` |
 | `submitSwap` | Submits a signed swap order to the Aori API | `request: SwapRequest, options?: { signal?: AbortSignal }` | `Promise<SwapResponse>` |
+| `executeSwap` | Executes a swap (sign + submit for ERC20, submit + execute for native) | `quote: QuoteResponse, config: SwapConfig, options?: { signal?: AbortSignal }` | `Promise<TransactionResponse \| SwapResponse>` |
 | `getOrderStatus` | Gets the current status of an order | `orderHash: string, options?: { signal?: AbortSignal }` | `Promise<OrderStatus>` |
 | `pollOrderStatus` | Polls the status of an order until completion or timeout | `orderHash: string, options?: PollOrderStatusOptions, abortOptions?: { signal?: AbortSignal }` | `Promise<OrderStatus>` |
 | `getOrderDetails` | Fetches detailed information about an order | `orderHash: string, options?: { signal?: AbortSignal }` | `Promise<OrderDetails>` |
+| `getOrder` | Fetches order details and parses into Order object | `orderHash: string, options?: { signal?: AbortSignal }` | `Promise<Order>` |
+| `parseOrder` | Parses QuoteResponse/SwapResponse/OrderDetails into Order object | `order: QuoteResponse \| SwapResponse \| OrderDetails` | `Promise<Order>` |
 | `queryOrders` | Queries orders with filtering criteria | `params: QueryOrdersParams, options?: { signal?: AbortSignal }` | `Promise<QueryOrdersResponse>` |
 | `connect` | Connects to the WebSocket server | `filter?: SubscriptionParams, callbacks?: WebSocketCallbacks` | `Promise<void>` |
 | `disconnect` | Disconnects from the WebSocket server | - | `void` |
 | `isConnected` | Checks if WebSocket is connected | - | `boolean` |
 | `getChain` | Gets chain info by chain identifier | `chain: string \| number` | `ChainInfo \| undefined` |
 | `getChainByEid` | Gets chain info by EID | `eid: number` | `ChainInfo \| undefined` |
+| `getChainInfoByEid` | Gets chain info by EID (alias for getChainByEid) | `eid: number` | `ChainInfo \| undefined` |
 | `getAllChains` | Gets all supported chains and their information | - | `Record<string, ChainInfo>` |
 | `getDomain` | Gets cached EIP-712 domain information | - | `DomainInfo \| null` |
 | `loadTokens` | Loads tokens into cache from API | `chain?: string \| number, options?: { signal?: AbortSignal }` | `Promise<void>` |
 | `getAllTokens` | Gets all cached tokens | - | `TokenInfo[]` |
 | `getTokens` | Gets cached tokens for specific chain | `chain: string \| number` | `TokenInfo[]` |
 | `fetchTokens` | Fetches tokens from API (bypasses cache) | `chain: string \| number, options?: { signal?: AbortSignal }` | `Promise<TokenInfo[]>` |
+| `isNativeToken` | Checks if a token address is the native token | `tokenAddress: string` | `boolean` |
+| `getNativeTokenAddress` | Gets the native token address | - | `string` |
+| `isNativeSwap` | Checks if a quote response is for a native token swap | `quoteResponse: QuoteResponse` | `boolean` |
+| `executeNativeSwap` | Executes a native token swap transaction | `nativeResponse: NativeSwapResponse, txExecutor: TxExecutor, gasLimit?: string` | `Promise<TransactionResponse>` |
+| `constructNativeSwapTransaction` | Constructs a native swap transaction request | `nativeResponse: NativeSwapResponse, gasLimit?: string` | `TransactionRequest` |
 
 ### Standalone Functions (Non-Stateful Usage)
 
@@ -619,9 +632,12 @@ For simple operations without maintaining state, use these standalone functions:
 | `signOrder` | Signs an order using the provided private key | `quoteResponse: QuoteResponse, signer: SignerType` | `Promise<string>` |
 | `signReadableOrder` | Signs an order using EIP-712 typed data | `quoteResponse: QuoteResponse, signer: TypedDataSigner, userAddress: string, baseUrl?: string, apiKey?: string, inputChain?: ChainInfo, outputChain?: ChainInfo` | `Promise<{orderHash: string, signature: string}>` |
 | `submitSwap` | Submits a signed swap order to the Aori API | `request: SwapRequest, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<SwapResponse>` |
+| `executeSwap` | Executes a swap (sign + submit for ERC20, submit + execute for native) | `quote: QuoteResponse, config: SwapConfig, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<TransactionResponse \| SwapResponse>` |
 | `getOrderStatus` | Gets the current status of an order | `orderHash: string, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<OrderStatus>` |
 | `pollOrderStatus` | Polls the status of an order until completion or timeout | `orderHash: string, baseUrl?: string, options?: PollOrderStatusOptions, apiKey?: string, abortOptions?: { signal?: AbortSignal }` | `Promise<OrderStatus>` |
 | `getOrderDetails` | Fetches detailed information about an order | `orderHash: string, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<OrderDetails>` |
+| `getOrder` | Fetches order details and parses into Order object | `orderHash: string, chains?: Record<string, ChainInfo>, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<Order>` |
+| `parseOrder` | Parses QuoteResponse/SwapResponse/OrderDetails into Order object | `order: QuoteResponse \| SwapResponse \| OrderDetails, chains?: Record<string, ChainInfo>, baseUrl?: string, apiKey?: string` | `Promise<Order>` |
 | `queryOrders` | Queries orders with filtering criteria | `baseUrl: string, params: QueryOrdersParams, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<QueryOrdersResponse>` |
 | `fetchAllChains` | Fetches the list of supported chains | `baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<Record<string, ChainInfo>>` |
 | `getDomain` | Fetches EIP-712 domain information for typed data signing | `baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<DomainInfo>` |
@@ -630,6 +646,18 @@ For simple operations without maintaining state, use these standalone functions:
 | `getAddress` | Fetches the contract address for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<string>` |
 | `fetchAllTokens` | Fetches all tokens, optionally filtered by chain | `baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal, chain?: string \| number }` | `Promise<TokenInfo[]>` |
 | `getTokens` | Fetches tokens for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<TokenInfo[]>` |
+| `isNativeToken` | Checks if a token address is the native token | `tokenAddress: string` | `boolean` |
+| `isNativeQuoteResponse` | Type guard for native quote responses | `response: QuoteResponse` | `response is NativeQuoteResponse` |
+| `isERC20QuoteResponse` | Type guard for ERC20 quote responses | `response: QuoteResponse` | `response is ERC20QuoteResponse` |
+| `isNativeSwap` | Checks if a quote response is for a native token swap | `quoteResponse: QuoteResponse` | `boolean` |
+| `isNativeSwapResponse` | Type guard for native swap responses | `response: SwapResponse` | `response is NativeSwapResponse` |
+| `isERC20SwapResponse` | Type guard for ERC20 swap responses | `response: SwapResponse` | `response is ERC20SwapResponse` |
+| `executeNativeSwap` | Executes a native token swap transaction | `nativeResponse: NativeSwapResponse, txExecutor: TxExecutor, gasLimit?: string` | `Promise<TransactionResponse>` |
+| `validateNativeSwapResponse` | Validates a native swap response | `response: NativeSwapResponse` | `void` |
+| `constructNativeSwapTransaction` | Constructs a native swap transaction request | `nativeResponse: NativeSwapResponse, gasLimit?: string` | `TransactionRequest` |
+| `validateContractAddress` | Validates a contract address against trusted addresses | `contractAddress: string, trustedAddresses?: string[]` | `void` |
+| `validateDepositNativeCalldata` | Validates transaction calldata for native deposits | `data: string` | `boolean` |
+| `createTypedData` | Creates EIP-712 typed data for order signing | `quoteResponse: QuoteResponse, params: TypedDataParams` | `TypedData` |
 
 # Examples
 

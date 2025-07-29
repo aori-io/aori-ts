@@ -1,5 +1,5 @@
-import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, DomainInfo, TokenInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketCallbacks, SubscriptionParams, TransactionResponse, NativeDepositExecutor, NativeSwapResponse, ERC20SwapResponse } from './types';
-import { fetchAllChains, getDomain, fetchAllTokens, getTokens, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder, isNativeToken, isNativeDeposit, executeNativeDeposit, constructNativeDepositTransaction, isNativeSwapResponse, isERC20SwapResponse } from './helpers';
+import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, DomainInfo, TokenInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketCallbacks, SubscriptionParams, TransactionResponse, NativeSwapResponse, SwapConfig, SwapResponse, OrderDetails, TxExecutor, Order } from './types';
+import { fetchAllChains, getDomain, fetchAllTokens, getTokens, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder, isNativeToken, isNativeSwap, executeNativeSwap, executeSwap, constructNativeSwapTransaction, parseOrder, getOrder } from './helpers';
 import {
   AORI_API,
   AORI_WS_API,
@@ -47,22 +47,37 @@ export class Aori {
   }
 
   /**
-   * Creates a new Aori instance and fetches up to date chain information and contract deployments
+   * Creates a new Aori instance with optional chain and token data
    * @param apiBaseUrl The base URL of the API
    * @param wsBaseUrl The base URL of the WebSocket API
    * @param apiKey Optional API key for authentication
    * @param loadTokens Optional boolean to load all tokens during initialization. Default: false
+   * @param chains Optional chains mapping to use instead of fetching from API. If provided, no API call is made for chains.
    * @returns A promise that resolves with the Aori instance
+   * 
+   * @example
+   * // Standard usage (fetches chains from API)
+   * const aori = await Aori.create()
+   * 
+   * @example
+   * // Using pre-defined chains (no API call for chains)
+   * const customChains = { ethereum: { chainKey: 'ethereum', chainId: 1, eid: 30101, address: '0x...' } }
+   * const aori = await Aori.create(AORI_API, AORI_WS_API, apiKey, false, customChains)
+   * 
+   * @example
+   * // Load tokens and use custom chains
+   * const aori = await Aori.create(AORI_API, AORI_WS_API, apiKey, true, customChains)
    */
   public static async create(
     apiBaseUrl: string = AORI_API, 
     wsBaseUrl: string = AORI_WS_API, 
     apiKey?: string,
-    loadTokens?: boolean
+    loadTokens?: boolean,
+    chains?: Record<string, ChainInfo>
   ) {
-    // Always fetch chains and domain
-    const [chains, domain] = await Promise.all([
-      fetchAllChains(apiBaseUrl, apiKey),
+    // Use provided chains or fetch from API
+    const [resolvedChains, domain] = await Promise.all([
+      chains ? Promise.resolve(chains) : fetchAllChains(apiBaseUrl, apiKey),
       getDomain(apiBaseUrl, apiKey)
     ]);
 
@@ -72,7 +87,7 @@ export class Aori {
       tokens = await fetchAllTokens(apiBaseUrl, apiKey);
     }
 
-    return new Aori(chains, domain, apiBaseUrl, wsBaseUrl, apiKey, tokens);
+    return new Aori(resolvedChains, domain, apiBaseUrl, wsBaseUrl, apiKey, tokens);
   }
 
   /**
@@ -195,7 +210,8 @@ export class Aori {
   public connect(filter: SubscriptionParams = {}, callbacks: WebSocketCallbacks = {}): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        const wsUrl = new URL(this.wsBaseUrl);
+        // Add /stream path to the WebSocket URL
+        const wsUrl = new URL('/stream', this.wsBaseUrl);
 
         // Add API key to URL if provided
         if (this.apiKey) {
@@ -329,6 +345,16 @@ export class Aori {
   }
 
   /**
+   * Fetches order details and converts them to a contract-compliant Order format
+   * @param orderHash The hash of the order to get
+   * @param options Optional parameters including AbortSignal
+   * @returns The contract-compliant order with EIDs resolved from cached chains
+   */
+  public async getOrder(orderHash: string, options: { signal?: AbortSignal } = {}): Promise<Order> {
+    return await getOrder(orderHash, this.chains, this.apiBaseUrl, this.apiKey, options);
+  }
+
+  /**
    * Queries orders with filtering criteria
    * @param params The parameters to filter the orders by
    * @param options Optional parameters including AbortSignal
@@ -364,23 +390,23 @@ export class Aori {
    * @param quoteResponse The quote response to check
    * @returns True if this is a native token deposit
    */
-  public isNativeDeposit(quoteResponse: QuoteResponse): boolean {
-    return isNativeDeposit(quoteResponse);
+  public isNativeSwap(quoteResponse: QuoteResponse): boolean {
+    return isNativeSwap(quoteResponse);
   }
 
   /**
    * Executes a native token deposit transaction
    * @param nativeResponse The native swap response containing transaction data
-   * @param executor The wallet/provider that can execute transactions
+   * @param txExecutor The wallet/provider that can execute transactions
    * @param gasLimit Optional gas limit override
    * @returns Transaction response with hash and success status
    */
-  public async executeNativeDeposit(
+  public async executeNativeSwap(
     nativeResponse: NativeSwapResponse,
-    executor: NativeDepositExecutor,
+    txExecutor: TxExecutor,
     gasLimit?: string
   ): Promise<TransactionResponse> {
-    return await executeNativeDeposit(nativeResponse, executor, gasLimit);
+    return await executeNativeSwap(nativeResponse, txExecutor, gasLimit);
   }
 
   /**
@@ -389,115 +415,38 @@ export class Aori {
    * @param gasLimit Optional gas limit override
    * @returns Transaction request ready for execution
    */
-  public constructNativeDepositTransaction(
+  public constructNativeSwapTransaction(
     nativeResponse: NativeSwapResponse,
     gasLimit?: string
   ) {
-    return constructNativeDepositTransaction(nativeResponse, gasLimit);
+    return constructNativeSwapTransaction(nativeResponse, gasLimit);
   }
 
-  /**
-   * Complete native token swap flow - gets quote, signs, submits, and executes transaction
-   * @param request The quote request for native token
-   * @param signer The signer for order signing (can be empty for native)
-   * @param executor The wallet/provider that can execute transactions
-   * @param gasLimit Optional gas limit override
-   * @param options Optional parameters including AbortSignal
-   * @returns Transaction response with hash and success status
-   */
-  public async executeNativeSwap(
-    request: QuoteRequest,
-    signer: SignerType | null,
-    executor: NativeDepositExecutor,
-    gasLimit?: string,
-    options: { signal?: AbortSignal } = {}
-  ): Promise<TransactionResponse> {
-    try {
-      // Validate that input token is native
-      if (!this.isNativeToken(request.inputToken)) {
-        throw new Error(`Input token must be native token (${NATIVE_TOKEN_ADDRESS}) for native swaps`);
-      }
-
-      // 1. Get quote
-      const quote = await this.getQuote(request, options);
-
-      // 2. Validate it's a native deposit
-      if (!this.isNativeDeposit(quote)) {
-        throw new Error("Quote response indicates ERC20 deposit, not native deposit");
-      }
-
-      // 3. Sign order (will return empty string for native)
-      let signature = "";
-      if (signer) {
-        signature = await this.signOrder(quote, signer);
-      }
-
-      // 4. Submit swap
-      const swapResponse = await this.submitSwap(
-        {
-          orderHash: quote.orderHash,
-          signature
-        },
-        options
-      );
-
-      // 5. Validate response type
-      if (!isNativeSwapResponse(swapResponse)) {
-        throw new Error("Expected native_deposit response but received standard ERC20 response");
-      }
-
-      // 6. Execute native deposit transaction
-      return await this.executeNativeDeposit(swapResponse, executor, gasLimit);
-
-    } catch (error) {
-      return {
-        success: false,
-        txHash: "",
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
-  }
-
-  /**
+    /**
    * Complete swap flow that handles both ERC20 and native tokens automatically
-   * @param request The quote request
-   * @param signer The signer for order signing
-   * @param executor Optional executor for native token transactions
-   * @param gasLimit Optional gas limit override for native transactions
+   * @param quote The quote response from a previous getQuote call
+   * @param config Configuration object containing the appropriate parameters for each swap type
    * @param options Optional parameters including AbortSignal
-   * @returns Transaction response or swap response depending on token type
+   * @returns TransactionResponse for native tokens (after execution) or SwapResponse for ERC20 tokens
    */
   public async executeSwap(
-    request: QuoteRequest,
-    signer: SignerType,
-    executor?: NativeDepositExecutor,
-    gasLimit?: string,
+    quote: QuoteResponse,
+    config: SwapConfig,
     options: { signal?: AbortSignal } = {}
-  ): Promise<TransactionResponse | { swapResponse: ERC20SwapResponse }> {
-    // Check if this is a native token swap
-    if (this.isNativeToken(request.inputToken)) {
-      if (!executor) {
-        throw new Error("Executor is required for native token swaps");
-      }
-      return await this.executeNativeSwap(request, signer, executor, gasLimit, options);
-    } else {
-      // Standard ERC20 flow
-      const quote = await this.getQuote(request, options);
-      const signature = await this.signOrder(quote, signer);
-      const swapResponse = await this.submitSwap(
-        {
-          orderHash: quote.orderHash,
-          signature
-        },
-        options
-      );
-
-      if (!isERC20SwapResponse(swapResponse)) {
-        throw new Error("Unexpected native token response for ERC20 swap request");
-      }
-
-      return { swapResponse };
-    }
+  ): Promise<TransactionResponse | SwapResponse> {
+    return await executeSwap(quote, config, this.apiBaseUrl, this.apiKey, options);
   }
+
+  /**
+   * Converts a QuoteResponse, SwapResponse, or OrderDetails to a contract-compliant Order
+   * @param order The quote response, swap response, or order details to convert
+   * @returns The contract-compliant order struct with EIDs resolved from cached chains
+   */
+  public async parseOrder(
+    order: QuoteResponse | SwapResponse | OrderDetails
+  ): Promise<Order> {
+    return await parseOrder(order, this.chains, this.apiBaseUrl, this.apiKey);
+  }
+ 
 }
 

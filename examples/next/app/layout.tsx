@@ -1,9 +1,7 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
-import { AppKitProvider } from './providers'
-
-const inter = Inter({ subsets: ['latin'] })
+import { WalletProvider } from './providers/WalletProvider'
+import { AoriProvider } from './providers/AoriProvider'
 
 export const metadata: Metadata = {
   title: 'Aori Swap Example',
@@ -17,8 +15,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <AppKitProvider>{children}</AppKitProvider>
+      <body>
+        <WalletProvider>
+          <AoriProvider>{children}</AoriProvider>
+        </WalletProvider>
       </body>
     </html>
   )
