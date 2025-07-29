@@ -124,7 +124,7 @@ describe('Chain Helper Functions', () => {
     it('should validate returned address format', async () => {
       const result = await getAddress('ethereum');
 
-      expect(result).toBeValidAddress();
+      expect(result).toMatch(/^0x[a-fA-F0-9]{40}$/);
     });
   });
 }); 

@@ -1,17 +1,4 @@
-//========================================================
-//        Contract Compliant Order Struct Interface
-//========================================================
-export interface Order {
-    offerer: string;
-    recipient: string;
-    inputToken: string;
-    outputToken: string;
-    inputAmount: string | number | bigint;
-    startTime: number;
-    endTime: number;
-    srcEid: number;
-    dstEid: number;
-}
+
 
 //========================================================
 //          Quote Request and Response Interfaces
@@ -27,9 +14,9 @@ export interface QuoteRequest {
     outputChain: string;
 }
 
-export interface QuoteResponse {
+// Base interface for common quote response fields
+export interface QuoteResponseBase {
     orderHash: string;
-    signingHash: string;
     offerer: string;
     recipient: string;
     inputToken: string;
@@ -43,6 +30,19 @@ export interface QuoteResponse {
     estimatedTime: number;
 }
 
+// ERC20 quote response (includes signing hash for EIP-712 signature)
+export interface ERC20QuoteResponse extends QuoteResponseBase {
+    signingHash: string;
+}
+
+// Native quote response (no signature required)
+export interface NativeQuoteResponse extends QuoteResponseBase {
+    // No additional fields - no signature needed for native swaps
+}
+
+// Union type for quote responses - discriminated by presence of signingHash field
+export type QuoteResponse = ERC20QuoteResponse | NativeQuoteResponse;
+
 //========================================================
 //            Swap Request and Response Interfaces
 //========================================================
@@ -52,7 +52,8 @@ export interface SwapRequest {
     signature: string;
 }
 
-export interface SwapResponse {
+// Base interface for common swap response fields
+export interface SwapResponseBase {
     orderHash: string;
     offerer: string;
     recipient: string;
@@ -67,6 +68,86 @@ export interface SwapResponse {
     status: string;
     createdAt: number;
 }
+
+// ERC20 deposit response (standard flow)
+export interface ERC20SwapResponse extends SwapResponseBase {
+    // No additional fields - just the base response
+}
+
+// Native deposit response (requires user transaction execution)
+export interface NativeSwapResponse extends SwapResponseBase {
+    to: string;        // Contract address to call
+    data: string;      // Transaction calldata (hex encoded)
+    value: string;     // Native token amount (wei, same as inputAmount)
+}
+
+// Union type for swap responses - discriminated by presence of to/data/value fields
+export type SwapResponse = ERC20SwapResponse | NativeSwapResponse;
+
+// Enhanced swap response that may include transaction details for executed native deposits
+export type EnhancedSwapResponse = SwapResponse & {
+    transaction?: TransactionResponse; // Present when native deposit was automatically executed
+};
+
+//========================================================
+//            Execute Swap Configuration Types
+//========================================================
+
+export interface ERC20SwapConfig {
+    type: 'erc20';
+    signer: TypedDataSigner;
+    userAddress: string;
+}
+
+export interface TxExecutor {
+    sendTransaction(request: TransactionRequest): Promise<{ hash: string; wait(): Promise<any> }>;
+    estimateGas?(request: TransactionRequest): Promise<bigint>;
+}
+
+export interface NativeSwapConfig {
+    type: 'native';
+    txExecutor: TxExecutor;
+    gasLimit?: string;
+}
+
+export type SwapConfig = ERC20SwapConfig | NativeSwapConfig;
+
+//========================================================
+//            Contract-Compliant Order Types
+//========================================================
+
+export interface Order {
+    inputAmount: string;
+    outputAmount: string;
+    inputToken: string;
+    outputToken: string;
+    startTime: number;
+    endTime: number;
+    srcEid: number;
+    dstEid: number;
+    offerer: string;
+    recipient: string;
+}
+
+
+//========================================================
+//            Native Token Transaction Interfaces
+//========================================================
+
+export interface TransactionRequest {
+    to: string;
+    data: string;
+    value: string;
+    gasLimit?: string;
+}
+
+export interface TransactionResponse {
+    success: boolean;
+    txHash: string;
+    error?: string;
+}
+
+
 
 //========================================================
 //                Chain Info Interface
