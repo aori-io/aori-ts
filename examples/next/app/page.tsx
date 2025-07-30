@@ -31,7 +31,15 @@ export default function CryptoSwap() {
             <Image src="/aori-ts.png" alt="Aori Logo" className="h-8 w-auto" width={120} height={60} />
             <p className="text-xl">Next.js Demo</p>
           </div>
-          <w3m-button balance="hide" />
+          <div className="flex items-center gap-4">
+            <a 
+              href="/cancel" 
+              className="btn btn-clear"
+            >
+              Cancel Test
+            </a>
+            <w3m-button balance="hide" />
+          </div>
         </div>
 
         {/* Main Content */}

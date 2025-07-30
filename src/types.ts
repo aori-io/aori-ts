@@ -104,6 +104,12 @@ export interface TxExecutor {
     estimateGas?(request: TransactionRequest): Promise<bigint>;
 }
 
+export interface CancelTxExecutor extends TxExecutor {
+    address?: string; // Optional: caller's address for more accurate fee estimation
+    call?(request: { to: string; data: string }): Promise<string>; // For contract read calls (quote function)
+    getChainId?(): Promise<number>; // Optional: get current chain ID for validation
+}
+
 export interface NativeSwapConfig {
     type: 'native';
     txExecutor: TxExecutor;
@@ -127,6 +133,14 @@ export interface Order {
     dstEid: number;
     offerer: string;
     recipient: string;
+}
+
+export interface CancelOrderResponse {
+    success: boolean;
+    txHash: string;
+    isCrossChain: boolean;
+    fee?: string; // LayerZero fee for cross-chain cancellations
+    error?: string;
 }
 
 
