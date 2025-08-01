@@ -1236,7 +1236,11 @@ class HttpError extends Error {
       
       return response.data;
     } catch (error) {
-      throw new Error(`Failed to get cancel transaction: ${error}`);
+      // Preserve the original error details from the server
+      if (error instanceof HttpError) {
+        throw new Error(error.message);
+      }
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
 
@@ -1268,7 +1272,8 @@ class HttpError extends Error {
       try {
         cancelResponse = await getCancelTx(orderHash, baseUrl, apiKey, { signal });
       } catch (error) {
-        throw new Error(`Order cannot be cancelled: ${error instanceof Error ? error.message : String(error)}`);
+        // Re-throw the original error without additional wrapping to preserve server message
+        throw error;
       }
     } else {
       // It's already a CancelTx object

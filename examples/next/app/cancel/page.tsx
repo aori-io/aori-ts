@@ -95,7 +95,10 @@ export default function CancelPage() {
         cancelTxData = await aori.getCancelTx(orderHash)
         setCancelTxData(cancelTxData)
       } catch (error) {
-        throw new Error(`Order cannot be cancelled: ${error instanceof Error ? error.message : String(error)}`)
+        // Preserve the original error message from the server
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        setStatusMessage(`Failed to get cancel data: ${errorMessage}`)
+        throw error // Re-throw to be caught by outer catch block
       }
 
       // Check if we're on the correct chain
@@ -114,7 +117,28 @@ export default function CancelPage() {
         
         try {
           await switchChain({ chainId: requiredChainId })
-          setStatusMessage('Network switched successfully. Preparing cancellation...')
+          
+          // Wait for the wallet client to reflect the chain change
+          setStatusMessage('Waiting for chain switch to complete...')
+          let attempts = 0
+          const maxAttempts = 20 // 10 seconds max (500ms * 20)
+          
+          while (attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 500)) // Wait 500ms
+            const updatedChainId = walletClient.chain?.id
+            
+            if (updatedChainId === requiredChainId) {
+              setStatusMessage('Network switched successfully. Preparing cancellation...')
+              break
+            }
+            
+            attempts++
+          }
+          
+          if (attempts >= maxAttempts) {
+            throw new Error(`Chain switch timeout: wallet still on chain ${walletClient.chain?.id}, expected ${requiredChainId}`)
+          }
+          
         } catch (switchError) {
           setIsChainSwitching(false)
           throw new Error(`Failed to switch to ${cancelTxData.chain}: ${switchError instanceof Error ? switchError.message : String(switchError)}`)
