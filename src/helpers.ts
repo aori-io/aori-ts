@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import { AORI_API, NATIVE_TOKEN_ADDRESS } from './constants';
-import { ChainInfo, DomainInfo, TokenInfo, QuoteRequest, QuoteResponse, ERC20QuoteResponse, NativeQuoteResponse, SignerType, SwapRequest, SwapResponse, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails, TransactionRequest, TransactionResponse, NativeSwapResponse, ERC20SwapResponse, SwapConfig, TxExecutor, Order, CancelOrderResponse, CancelTxExecutor } from './types';
+import { ChainInfo, DomainInfo, TokenInfo, QuoteRequest, QuoteResponse, ERC20QuoteResponse, NativeQuoteResponse, SignerType, SwapRequest, SwapResponse, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails, TransactionRequest, TransactionResponse, NativeSwapResponse, ERC20SwapResponse, SwapConfig, TxExecutor, Order, CancelOrderResponse, CancelTxExecutor, CancelTx } from './types';
 
 ////////////////////////////////////////////////////////////////*/
 //                      NATIVE TOKEN UTILITIES
@@ -952,275 +952,6 @@ export async function getChainByEid(
       recipient: order.recipient
     };
   }
-
-
-  
-  ////////////////////////////////////////////////////////////////*/
-  //                      CANCELLATION UTILITIES
-  //////////////////////////////////////////////////////////////*/
-
-  // ABI fragments for Aori contract functions we need
-  const AORI_ABI_FRAGMENTS = [
-    // Single-chain cancel function
-    "function cancel(bytes32 orderId)",
-    // Cross-chain cancel function  
-    "function cancel(bytes32 orderId, tuple(uint128 inputAmount, uint128 outputAmount, address inputToken, address outputToken, uint32 startTime, uint32 endTime, uint32 srcEid, uint32 dstEid, address offerer, address recipient) orderToCancel, bytes extraOptions)",
-    // Quote function for LayerZero fee estimation
-    "function quote(uint32 _dstEid, uint8 _msgType, bytes _options, bool _payInLzToken, uint32 _srcEid, address _filler) view returns (uint256 fee)"
-  ];
-
-  /**
-   * Safely converts a value to a decimal string, handling scientific notation
-   * @param value The value to convert (can be string, number, or bigint)
-   * @returns Decimal string representation
-   */
-  export function safeToDecimalString(value: string | number | bigint): string {
-    if (typeof value === 'bigint') {
-      return value.toString();
-    }
-    
-    if (typeof value === 'number') {
-      // Handle scientific notation by converting to fixed decimal
-      return value.toFixed(0);
-    }
-    
-    if (typeof value === 'string') {
-      // Handle scientific notation in strings
-      if (value.includes('e') || value.includes('E')) {
-        return Number(value).toFixed(0);
-      }
-      
-      // Handle hex strings
-      if (value.startsWith('0x')) {
-        return BigInt(value).toString();
-      }
-      
-      // Regular decimal string
-      return value;
-    }
-    
-    return String(value);
-  }
-
-  /**
-   * Constructs LayerZero extra options for cross-chain operations
-   * @param gasLimit Gas limit for the destination chain execution
-   * @returns Encoded extra options bytes
-   */
-  function constructLayerZeroExtraOptions(gasLimit: number): string {
-    // LayerZero V2 extra options format
-    // Type 3: lzReceive option
-    // [uint16 optionType][uint16 extraGas][uint128 nativeGas]
-    
-    const optionType = 3; // lzReceive option
-    const extraGas = gasLimit;
-    
-    // Encode as bytes
-    const optionTypeBytes = new Uint8Array(2);
-    optionTypeBytes[0] = (optionType >> 8) & 0xff;
-    optionTypeBytes[1] = optionType & 0xff;
-    
-    const extraGasBytes = new Uint8Array(2);
-    extraGasBytes[0] = (extraGas >> 8) & 0xff;
-    extraGasBytes[1] = extraGas & 0xff;
-    
-    const nativeGasBytes = new Uint8Array(16); // uint128 = 16 bytes
-    // nativeGas is 0, so bytes remain zero
-    
-    const combined = new Uint8Array(optionTypeBytes.length + extraGasBytes.length + nativeGasBytes.length);
-    combined.set(optionTypeBytes, 0);
-    combined.set(extraGasBytes, 2);
-    combined.set(nativeGasBytes, 4);
-    
-    return '0x' + Array.from(combined).map(b => b.toString(16).padStart(2, '0')).join('');
-  }
-  
-    /**
-   * Cancels an order by automatically determining single-chain vs cross-chain cancellation
-   * @param orderHash The hash of the order to cancel
-   * @param txExecutor Transaction executor for blockchain operations with optional RPC call capability
-   * @param chains Optional chains object (if not provided, will fetch from API)
-   * @param baseUrl The base URL of the API
-   * @param apiKey Optional API key for authentication
-   * @param options Optional parameters including AbortSignal
-   * @returns Transaction response with cancellation details
-   */
-  export async function cancelOrder(
-    orderHash: string,
-    txExecutor: CancelTxExecutor,
-    chains?: Record<string, ChainInfo>,
-    baseUrl: string = AORI_API,
-    apiKey?: string,
-    { signal }: { signal?: AbortSignal } = {}
-  ): Promise<CancelOrderResponse> {
-    try {
-      // Fetch order details
-      const orderDetails = await getOrderDetails(orderHash, baseUrl, apiKey, { signal });
-      const resolvedChains = chains || await fetchAllChains(baseUrl, apiKey, { signal });
-      const order = await parseOrder(orderDetails, resolvedChains, baseUrl, apiKey);
-      const isCrossChain = order.srcEid !== order.dstEid;
-      const targetChain = isCrossChain 
-        ? resolvedChains[orderDetails.outputChain.toLowerCase()] // Cross-chain: cancel on destination
-        : resolvedChains[orderDetails.inputChain.toLowerCase()];  // Single-chain: cancel on source
-        
-      if (!targetChain) {
-        const chainType = isCrossChain ? 'destination' : 'source';
-        const chainKey = isCrossChain ? orderDetails.outputChain : orderDetails.inputChain;
-        throw new Error(`${chainType} chain '${chainKey}' not found in resolved chains`);
-      }
-      
-      let transactionRequest: TransactionRequest;
-      let estimatedFee: string = "0";
-      
-             if (isCrossChain) {
-         // Cross-chain cancellation: cancel(bytes32, Order, bytes) on destination chain
-         
-         // Construct LayerZero extra options
-         const gasLimit = 250000; // gas limit for destination chain
-         const extraOptions = constructLayerZeroExtraOptions(gasLimit);
-         
-         // Get LayerZero fee using contract's quote function
-         try {
-           // Create interface for encoding the quote function call
-           const aoriInterface = new ethers.Interface(AORI_ABI_FRAGMENTS);
-           
-           // Use caller's address from TxExecutor if available, otherwise zero address
-           const callerAddress = txExecutor.address || ethers.ZeroAddress;
-           
-           // Encode the quote function call with proper ABI encoding
-           const calldata = aoriInterface.encodeFunctionData('quote', [
-             order.srcEid,     // _dstEid: destination for the message (source chain for cancellation)
-             1,                // _msgType: 1 for cancellation
-             extraOptions,     // _options: LayerZero extra options
-             false,            // _payInLzToken: false (pay in native token)
-             order.dstEid,     // _srcEid: source for the message (destination chain)
-             callerAddress     // _filler: caller's address for context
-           ]);
-           
-           let result: string;
-           
-           if (txExecutor.call) {
-             // Use the wallet's RPC provider via the call method (preferred)
-             result = await txExecutor.call({
-               to: targetChain.address,
-               data: calldata
-             });
-           } else {
-             // Fallback to public RPC endpoint
-             const rpcUrl = `https://rpc.ankr.com/${orderDetails.outputChain}`;
-             const response = await fetch(rpcUrl, {
-               method: 'POST',
-               headers: { 'Content-Type': 'application/json' },
-               body: JSON.stringify({
-                 jsonrpc: '2.0',
-                 method: 'eth_call',
-                 params: [{
-                   to: targetChain.address,
-                   data: calldata
-                 }, 'latest'],
-                 
-                 id: Date.now()
-               })
-             });
-             
-             const jsonResult = await response.json();
-             result = jsonResult.result;
-           }
-           
-           if (result && result !== '0x') {
-             // Safely convert result to decimal string, handling any format
-             estimatedFee = safeToDecimalString(result);
-           } else {
-             throw new Error('Failed to get quote from contract');
-           }
-         } catch (error) {
-           // Fallback to conservative estimate if quote call fails
-           console.warn('LayerZero fee estimation failed, using fallback:', error);
-           estimatedFee = "10000000000000000"; // 0.01 ETH in wei (10^16)
-         }
-        
-        // Construct transaction for cross-chain cancel: cancel(bytes32, Order, bytes)
-        const aoriInterface = new ethers.Interface(AORI_ABI_FRAGMENTS);
-        const calldata = aoriInterface.encodeFunctionData('cancel(bytes32,tuple(uint128,uint128,address,address,uint32,uint32,uint32,uint32,address,address),bytes)', [
-          orderHash,
-          [
-            safeToDecimalString(order.inputAmount),
-            safeToDecimalString(order.outputAmount), 
-            order.inputToken,
-            order.outputToken,
-            order.startTime,
-            order.endTime,
-            order.srcEid,
-            order.dstEid,
-            order.offerer,
-            order.recipient
-          ],
-          extraOptions
-        ]);
-        
-        transactionRequest = {
-          to: targetChain.address,
-          data: calldata,
-          value: estimatedFee
-        };
-      } else {
-        // Single-chain cancellation: cancel(bytes32) on source chain
-        const aoriInterface = new ethers.Interface(AORI_ABI_FRAGMENTS);
-        const calldata = aoriInterface.encodeFunctionData('cancel(bytes32)', [orderHash]);
-        
-        transactionRequest = {
-          to: targetChain.address,
-          data: calldata,
-          value: "0" // No value needed for single-chain cancellation
-        };
-      }
-      
-      // Validate chain before sending transaction
-      if (txExecutor.getChainId) {
-        const currentChainId = await txExecutor.getChainId();
-        const requiredChainId = targetChain.chainId;
-        
-        if (currentChainId !== requiredChainId) {
-          const chainType = isCrossChain ? 'destination' : 'source';
-          throw new Error(
-            `Chain mismatch: Wallet is connected to chain ${currentChainId}, but cancellation requires ${chainType} chain ${requiredChainId} (${targetChain.chainKey}). Please switch to the correct chain before cancelling.`
-          );
-        }
-      }
-      
-      // Estimate gas if available
-      if (txExecutor.estimateGas) {
-        try {
-          const estimatedGas = await txExecutor.estimateGas(transactionRequest);
-          const bufferMultiplier = BigInt(120); // 120% = original + 20% buffer
-          const baseMultiplier = BigInt(100);
-          transactionRequest.gasLimit = (estimatedGas * bufferMultiplier / baseMultiplier).toString();
-        } catch (error) {
-          // Conservative fallbacks based on transaction type
-          transactionRequest.gasLimit = isCrossChain ? "400000" : "200000";
-        }
-      }
-      
-      // Execute transaction
-      const tx = await txExecutor.sendTransaction(transactionRequest);
-      await tx.wait();
-      
-      return {
-        success: true,
-        txHash: tx.hash,
-        isCrossChain,
-        ...(isCrossChain && { fee: estimatedFee })
-      };
-      
-    } catch (error) {
-      return {
-        success: false,
-        txHash: "",
-        isCrossChain: false,
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
-  }
   
   ////////////////////////////////////////////////////////////////*/
   //                   GET ORDER STATUS
@@ -1473,3 +1204,205 @@ class HttpError extends Error {
         super(message);
     }
 }
+
+  ////////////////////////////////////////////////////////////////*/
+  //                     CANCELLATION UTILITIES
+  //////////////////////////////////////////////////////////////*/
+  
+  /**
+   * Gets transaction data for cancelling an order from the API
+   * @param orderHash The hash of the order to cancel
+   * @param baseUrl The base URL of the API
+   * @param apiKey Optional API key for authentication
+   * @param options Optional parameters including AbortSignal
+   * @returns Promise<CancelTx> Transaction data for cancelling the order
+   */
+  export async function getCancelTx(
+    orderHash: string,
+    baseUrl: string = AORI_API,
+    apiKey?: string,
+    { signal }: { signal?: AbortSignal } = {}
+  ): Promise<CancelTx> {
+    try {
+      const response = await http({
+        method: 'POST',
+        url: new URL('cancel', baseUrl),
+        headers: buildHeaders(apiKey),
+        signal,
+        data: {
+          orderHash
+        }
+      });
+      
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to get cancel transaction: ${error}`);
+    }
+  }
+
+  /**
+   * Cancels an order using either an order hash or pre-fetched cancel response
+   * @param orderHashOrCancelTx Either an order hash string or a CancelTx object
+   * @param txExecutor Transaction executor for blockchain operations
+   * @param baseUrl The base URL of the API (only used if orderHash provided)
+   * @param apiKey Optional API key for authentication (only used if orderHash provided)
+   * @param options Optional parameters including AbortSignal
+   * @returns Transaction response with cancellation details
+   */
+  export async function cancelOrder(
+    orderHashOrCancelTx: string | CancelTx,
+    txExecutor: CancelTxExecutor,
+    baseUrl: string = AORI_API,
+    apiKey?: string,
+    { signal }: { signal?: AbortSignal } = {}
+  ): Promise<CancelOrderResponse> {
+    try {
+      let cancelResponse: CancelTx;
+      
+          // Determine if we need to fetch cancel data or if it's already provided
+    if (typeof orderHashOrCancelTx === 'string') {
+      // It's an order hash, need to fetch cancel data
+      const orderHash = orderHashOrCancelTx;
+      
+      // Get cancel transaction data from API - the API will determine if cancellable
+      try {
+        cancelResponse = await getCancelTx(orderHash, baseUrl, apiKey, { signal });
+      } catch (error) {
+        throw new Error(`Order cannot be cancelled: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    } else {
+      // It's already a CancelTx object
+      cancelResponse = orderHashOrCancelTx;
+    }
+      
+      // Validate chain if possible
+      if (txExecutor.getChainId) {
+        try {
+          const currentChainId = await txExecutor.getChainId();
+          console.log('Cancel transaction debug info:', {
+            orderHash: cancelResponse.orderHash,
+            requiredChain: cancelResponse.chain,
+            currentChainId,
+            contractAddress: cancelResponse.to,
+            transactionValue: cancelResponse.value
+          });
+        } catch (error) {
+          console.warn('Could not get current chain ID for validation:', error);
+        }
+      }
+      
+      // Construct transaction request
+      const transactionRequest: TransactionRequest = {
+        to: cancelResponse.to,
+        data: cancelResponse.data,
+        value: cancelResponse.value
+      };
+      
+      // Estimate gas if available
+      if (txExecutor.estimateGas) {
+        try {
+          const estimatedGas = await txExecutor.estimateGas(transactionRequest);
+          // Add 20% buffer to estimated gas
+          const bufferMultiplier = BigInt(120); // 120% = original + 20% buffer
+          const baseMultiplier = BigInt(100);
+          transactionRequest.gasLimit = (estimatedGas * bufferMultiplier / baseMultiplier).toString();
+        } catch (error) {
+          // Conservative fallback gas limit
+          transactionRequest.gasLimit = "400000";
+        }
+      }
+      
+      // Execute transaction
+      const tx = await txExecutor.sendTransaction(transactionRequest);
+      await tx.wait();
+      
+      // Determine if this was cross-chain based on value (cross-chain has LayerZero fees)
+      const isCrossChain = cancelResponse.value !== "0";
+      
+      return {
+        success: true,
+        txHash: tx.hash,
+        isCrossChain,
+        ...(isCrossChain && { fee: cancelResponse.value })
+      };
+      
+    } catch (error) {
+      return {
+        success: false,
+        txHash: "",
+        isCrossChain: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////*/
+  //                          CANCEL
+  //////////////////////////////////////////////////////////////*/
+  
+  /**
+   * Checks if an order can be cancelled based on its event history
+   * An order can be cancelled if it has a "received" event but lacks "completed" or "cancelled" events
+   * @param orderHash The hash of the order to check
+   * @param orderDetails Optional pre-fetched order details to avoid duplicate API calls
+   * @param baseUrl The base URL of the API (only used if orderDetails not provided)
+   * @param apiKey Optional API key for authentication (only used if orderDetails not provided)
+   * @param options Optional parameters including AbortSignal (only used if orderDetails not provided)
+   * @returns Promise<boolean> True if the order can be cancelled, false otherwise
+   */
+  export async function canCancel(
+    orderHash: string,
+    orderDetails?: OrderDetails,
+    baseUrl: string = AORI_API,
+    apiKey?: string,
+    { signal }: { signal?: AbortSignal } = {}
+  ): Promise<boolean> {
+    try {
+            // Use provided order details or fetch them if not provided
+      const resolvedOrderDetails = orderDetails || await getOrderDetails(orderHash, baseUrl, apiKey, { signal });
+      
+      if (!resolvedOrderDetails.events || !Array.isArray(resolvedOrderDetails.events)) {
+        console.warn('Order has no events array:', orderHash);
+        return false;
+      }
+      
+      // Check if order has expired (current time > endTime)
+      const currentTime = Math.floor(Date.now() / 1000); 
+      const endTime = Number(resolvedOrderDetails.endTime);
+      const hasExpired = currentTime > endTime;
+      
+      // Extract event types from the events array
+      const eventTypes = resolvedOrderDetails.events.map(event => event.eventType?.toLowerCase());
+      
+      // Check if order has "received" event (required for cancellation)
+      const hasReceivedEvent = eventTypes.includes('received');
+      
+      // Check if order has terminal events that prevent cancellation
+      const hasCompletedEvent = eventTypes.includes('completed');
+      const hasCancelledEvent = eventTypes.includes('cancelled');
+      
+      // Order can be cancelled if:
+      // 1. It has a "received" event (was processed by the system)
+      // 2. It does not have "completed" or "cancelled" events (not in terminal state)
+      // 3. It has not expired (current time <= endTime)
+      const canBeCancelled = hasReceivedEvent && !hasCompletedEvent && !hasCancelledEvent && !hasExpired;
+      
+      console.log('Cancellation check for order:', {
+        orderHash,
+        events: eventTypes,
+        hasReceivedEvent,
+        hasCompletedEvent,
+        hasCancelledEvent,
+        hasExpired,
+        currentTime,
+        endTime,
+        canBeCancelled
+      });
+      
+      return canBeCancelled;
+      
+    } catch (error) {
+      console.error('Failed to check if order can be cancelled:', error);
+      return false;
+    }
+  }

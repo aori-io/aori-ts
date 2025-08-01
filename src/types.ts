@@ -143,6 +143,14 @@ export interface CancelOrderResponse {
     error?: string;
 }
 
+export interface CancelTx {
+    orderHash: string;
+    to: string;
+    data: string;
+    value: string;
+    chain: string;
+}
+
 
 //========================================================
 //            Native Token Transaction Interfaces
@@ -204,7 +212,8 @@ export type OrderStatus =
     | { status: 'pending', timestamp: number }
     | { status: 'received', txHash: string, txUrl: string, timestamp: number }
     | { status: 'completed', txHash: string, txUrl: string, timestamp: number }
-    | { status: 'failed', error: string, timestamp: number };
+    | { status: 'failed', error: string, timestamp: number }
+    | { status: 'cancelled', timestamp: number };
 
 export interface OrderPendingStatus {
     status: "pending";

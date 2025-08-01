@@ -36,7 +36,7 @@ export default function CryptoSwap() {
               href="/cancel" 
               className="btn btn-clear"
             >
-              Cancel Test
+              Test Cancel
             </a>
             <w3m-button balance="hide" />
           </div>

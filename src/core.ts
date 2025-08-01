@@ -20,9 +20,10 @@ import {
   Order,
   CancelOrderResponse,
   CancelTxExecutor,
-  WSEvent
+  WSEvent,
+  CancelTx
 } from './types'
-import { fetchAllChains, getDomain, fetchAllTokens, getTokens, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder, isNativeToken, isNativeSwap, executeNativeSwap, executeSwap, constructNativeSwapTransaction, parseOrder, getOrder, cancelOrder } from './helpers';
+import { fetchAllChains, getDomain, fetchAllTokens, getTokens, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder, isNativeToken, isNativeSwap, executeNativeSwap, executeSwap, constructNativeSwapTransaction, parseOrder, getOrder, cancelOrder, canCancel, getCancelTx } from './helpers';
 import {
   AORI_API,
   AORI_WS_API,
@@ -407,7 +408,28 @@ export class Aori {
     txExecutor: CancelTxExecutor, 
     options: { signal?: AbortSignal } = {}
   ): Promise<CancelOrderResponse> {
-    return await cancelOrder(orderHash, txExecutor, this.chains, this.apiBaseUrl, this.apiKey, options);
+    return await cancelOrder(orderHash, txExecutor, this.apiBaseUrl, this.apiKey, options);
+  }
+
+  /**
+   * Gets transaction data for cancelling an order from the API
+   * @param orderHash The hash of the order to cancel
+   * @param options Optional parameters including AbortSignal
+   * @returns The cancel transaction data
+   */
+  public async getCancelTx(orderHash: string, options: { signal?: AbortSignal } = {}): Promise<CancelTx> {
+    return await getCancelTx(orderHash, this.apiBaseUrl, this.apiKey, options);
+  }
+
+  /**
+   * Checks if an order can be cancelled based on its event history
+   * An order can be cancelled if it has a "received" event but lacks "completed" or "cancelled" events
+   * @param orderHash The hash of the order to check
+   * @param options Optional parameters including AbortSignal
+   * @returns Promise<boolean> True if the order can be cancelled, false otherwise
+   */
+  public async canCancel(orderHash: string, options: { signal?: AbortSignal } = {}): Promise<boolean> {
+    return await canCancel(orderHash, undefined, this.apiBaseUrl, this.apiKey, options);
   }
 
   //////////////////////////////////////////////////////////
