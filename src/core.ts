@@ -408,7 +408,7 @@ export class Aori {
     txExecutor: CancelTxExecutor, 
     options: { signal?: AbortSignal } = {}
   ): Promise<CancelOrderResponse> {
-    return await cancelOrder(orderHash, txExecutor, this.apiBaseUrl, this.apiKey, options);
+    return await cancelOrder(orderHash, undefined, txExecutor, this.apiBaseUrl, this.apiKey, options);
   }
 
   /**

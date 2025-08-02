@@ -283,6 +283,15 @@ body {
   background: var(--orange-700);
 }
 
+.btn-warning {
+  background: var(--yellow-500);
+  color: var(--zinc-900);
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: var(--yellow-300);
+}
+
 .btn-sm {
   font-size: 0.875rem;
   padding: 0.25rem 0.75rem;

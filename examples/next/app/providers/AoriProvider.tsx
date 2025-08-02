@@ -10,9 +10,6 @@ const apiKey = process.env.NEXT_PUBLIC_AORI_API_KEY
 const apiBaseUrl = process.env.NEXT_PUBLIC_AORI_API_URL
 const wsBaseUrl = process.env.NEXT_PUBLIC_AORI_WS_URL
 
-// Create the promise once at module level
-console.log('Initializing Aori with:', { apiBaseUrl, wsBaseUrl, hasApiKey: !!apiKey })
-
 // Define create parameters
 const loadTokens = true;
 

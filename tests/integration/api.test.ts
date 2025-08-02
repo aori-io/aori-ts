@@ -3,6 +3,7 @@ import { setupServer } from 'msw/node'
 import { Aori } from '../../src/core';
 import { getChain, getAddress, getQuote } from '../../src/helpers';
 import { AORI_API } from '../../src/constants';
+import '../setup';
 
 describe('Aori API Integration Tests', () => {
   const mockChains = [
@@ -161,7 +162,13 @@ describe('Aori API Integration Tests', () => {
       const quote = await aori.getQuote(quoteRequest);
 
       expect(quote.orderHash).toBeValidOrderHash();
-      expect(quote.signingHash).toBeValidOrderHash();
+      
+      // Since our mock includes signingHash, this should be an ERC20 response
+      if ('signingHash' in quote) {
+        expect(quote.signingHash).toBeValidOrderHash();
+      } else {
+        throw new Error('Expected ERC20 quote response with signingHash, but got native response');
+      }
       expect(quote.inputChain).toBe('base');
       expect(quote.outputChain).toBe('arbitrum');
       expect(quote.inputAmount).toBe('1000000');
