@@ -7,16 +7,17 @@ const AoriContext = createContext<Aori | null>(null)
 
 // Initialize Aori instance at module level
 const apiKey = process.env.NEXT_PUBLIC_AORI_API_KEY
-const apiBaseUrl = process.env.NEXT_PUBLIC_AORI_API_URL || 'https://dev.api.aori.io'
-const wsBaseUrl = process.env.NEXT_PUBLIC_AORI_WS_URL || 'wss://dev.api.aori.io'
+const apiBaseUrl = process.env.NEXT_PUBLIC_AORI_API_URL
+const wsBaseUrl = process.env.NEXT_PUBLIC_AORI_WS_URL
 
-// Create the promise once at module level
-console.log('Initializing Aori with:', { apiBaseUrl, wsBaseUrl, hasApiKey: !!apiKey })
+// Define create parameters
+const loadTokens = true;
+
 const aoriPromise = Aori.create(
   apiBaseUrl,
   wsBaseUrl,
   apiKey || undefined,
-  true // loadTokens = true
+  loadTokens,
 )
 
 export function useAori() {

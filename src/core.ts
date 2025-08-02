@@ -1,5 +1,29 @@
-import { SwapRequest, QuoteRequest, QuoteResponse, ChainInfo, DomainInfo, TokenInfo, TypedDataSigner, PollOrderStatusOptions, QueryOrdersParams, WSEvent, SignerType, WebSocketCallbacks, SubscriptionParams, TransactionResponse, NativeSwapResponse, SwapConfig, SwapResponse, OrderDetails, TxExecutor, Order } from './types';
-import { fetchAllChains, getDomain, fetchAllTokens, getTokens, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder, isNativeToken, isNativeSwap, executeNativeSwap, executeSwap, constructNativeSwapTransaction, parseOrder, getOrder } from './helpers';
+import {
+  ChainInfo,
+  DomainInfo,
+  TokenInfo,
+  QuoteRequest,
+  QuoteResponse,
+  SwapRequest,
+  SwapResponse,
+  SignerType,
+  TypedDataSigner,
+  PollOrderStatusOptions,
+  QueryOrdersParams,
+  SubscriptionParams,
+  WebSocketCallbacks,
+  OrderDetails,
+  TransactionResponse,
+  NativeSwapResponse,
+  SwapConfig,
+  TxExecutor,
+  Order,
+  CancelOrderResponse,
+  CancelTxExecutor,
+  WSEvent,
+  CancelTx
+} from './types'
+import { fetchAllChains, getDomain, fetchAllTokens, getTokens, getQuote, signOrder, submitSwap, getOrderStatus, pollOrderStatus, getOrderDetails, queryOrders, signReadableOrder, isNativeToken, isNativeSwap, executeNativeSwap, executeSwap, constructNativeSwapTransaction, parseOrder, getOrder, cancelOrder, canCancel, getCancelTx } from './helpers';
 import {
   AORI_API,
   AORI_WS_API,
@@ -53,10 +77,11 @@ export class Aori {
    * @param apiKey Optional API key for authentication
    * @param loadTokens Optional boolean to load all tokens during initialization. Default: false
    * @param chains Optional chains mapping to use instead of fetching from API. If provided, no API call is made for chains.
+   * @param domain Optional domain info for EIP-712. If provided, no API call is made for domain.
    * @returns A promise that resolves with the Aori instance
    * 
    * @example
-   * // Standard usage (fetches chains from API)
+   * // Standard usage (fetches chains and domain from API)
    * const aori = await Aori.create()
    * 
    * @example
@@ -65,20 +90,27 @@ export class Aori {
    * const aori = await Aori.create(AORI_API, AORI_WS_API, apiKey, false, customChains)
    * 
    * @example
-   * // Load tokens and use custom chains
-   * const aori = await Aori.create(AORI_API, AORI_WS_API, apiKey, true, customChains)
+   * // Using custom domain (useful for APIs that don't support domain endpoint)
+   * const customDomain = { name: 'Aori', version: '0.3.1', ... }
+   * const aori = await Aori.create(AORI_API, AORI_WS_API, apiKey, false, undefined, customDomain)
+   * 
+   * @example
+   * // Load tokens and use custom chains and domain
+   * const aori = await Aori.create(AORI_API, AORI_WS_API, apiKey, true, customChains, customDomain)
    */
   public static async create(
     apiBaseUrl: string = AORI_API, 
     wsBaseUrl: string = AORI_WS_API, 
     apiKey?: string,
     loadTokens?: boolean,
-    chains?: Record<string, ChainInfo>
+    chains?: Record<string, ChainInfo>,
+    domain?: DomainInfo
   ) {
     // Use provided chains or fetch from API
-    const [resolvedChains, domain] = await Promise.all([
+    // Use provided domain or fetch from API
+    const [resolvedChains, resolvedDomain] = await Promise.all([
       chains ? Promise.resolve(chains) : fetchAllChains(apiBaseUrl, apiKey),
-      getDomain(apiBaseUrl, apiKey)
+      domain ? Promise.resolve(domain) : getDomain(apiBaseUrl, apiKey)
     ]);
 
     // Conditionally fetch all tokens
@@ -87,7 +119,7 @@ export class Aori {
       tokens = await fetchAllTokens(apiBaseUrl, apiKey);
     }
 
-    return new Aori(resolvedChains, domain, apiBaseUrl, wsBaseUrl, apiKey, tokens);
+    return new Aori(resolvedChains, resolvedDomain, apiBaseUrl, wsBaseUrl, apiKey, tokens);
   }
 
   /**
@@ -362,6 +394,42 @@ export class Aori {
    */
   public async queryOrders(params: QueryOrdersParams, options: { signal?: AbortSignal } = {}) {
     return await queryOrders(this.apiBaseUrl, params, this.apiKey, options);
+  }
+
+  /**
+   * Cancels an order on the Aori API
+   * @param orderHash The hash of the order to cancel
+   * @param txExecutor Transaction executor for blockchain operations with optional RPC call capability
+   * @param options Optional parameters including AbortSignal
+   * @returns The cancel order response
+   */
+  public async cancelOrder(
+    orderHash: string, 
+    txExecutor: CancelTxExecutor, 
+    options: { signal?: AbortSignal } = {}
+  ): Promise<CancelOrderResponse> {
+    return await cancelOrder(orderHash, undefined, txExecutor, this.apiBaseUrl, this.apiKey, options);
+  }
+
+  /**
+   * Gets transaction data for cancelling an order from the API
+   * @param orderHash The hash of the order to cancel
+   * @param options Optional parameters including AbortSignal
+   * @returns The cancel transaction data
+   */
+  public async getCancelTx(orderHash: string, options: { signal?: AbortSignal } = {}): Promise<CancelTx> {
+    return await getCancelTx(orderHash, this.apiBaseUrl, this.apiKey, options);
+  }
+
+  /**
+   * Checks if an order can be cancelled based on its event history
+   * An order can be cancelled if it has a "received" event but lacks "completed" or "cancelled" events
+   * @param orderHash The hash of the order to check
+   * @param options Optional parameters including AbortSignal
+   * @returns Promise<boolean> True if the order can be cancelled, false otherwise
+   */
+  public async canCancel(orderHash: string, options: { signal?: AbortSignal } = {}): Promise<boolean> {
+    return await canCancel(orderHash, undefined, this.apiBaseUrl, this.apiKey, options);
   }
 
   //////////////////////////////////////////////////////////

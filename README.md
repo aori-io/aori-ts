@@ -238,6 +238,9 @@ All the following functions support AbortSignal:
 - `getAddress(chain, baseUrl, apiKey, { signal })`
 - `fetchAllTokens(baseUrl, apiKey, { signal, chain })`
 - `getTokens(chain, baseUrl, apiKey, { signal })`
+- `cancelOrder(orderHashOrCancelTx, txExecutor, baseUrl, apiKey, { signal })`
+- `getCancelTx(orderHash, baseUrl, apiKey, { signal })`
+- `canCancel(orderHash, orderDetails, baseUrl, apiKey, { signal })`
 
 ### Aori Class Methods
 
@@ -255,6 +258,11 @@ const order = await aori.getOrder(orderHash, { signal: AbortSignal.timeout(3000)
 // Token methods also support AbortSignal
 await aori.loadTokens('ethereum', { signal: AbortSignal.timeout(3000) });
 const tokens = await aori.fetchTokens('base', { signal: controller.signal });
+
+// Cancellation methods also support AbortSignal
+const canCancel = await aori.canCancel(orderHash, { signal: AbortSignal.timeout(5000) });
+const cancelTx = await aori.getCancelTx(orderHash, { signal: controller.signal });
+const cancelResult = await aori.cancelOrder(orderHash, txExecutor, { signal: controller.signal });
 ```
 
 ## API Reference
@@ -266,6 +274,7 @@ const tokens = await aori.fetchTokens('base', { signal: controller.signal });
 | `GET`  | `/tokens`                  | Get a list of supported tokens   | -                |
 | `POST` | `/quote`                   | Get a quote                      | `<QuoteRequest>` |
 | `POST` | `/swap`                    | Execute Swap                     | `<SwapRequest>`  |
+| `POST` | `/cancel`                  | Get cancellation transaction data| `{ "orderHash": "0x..." }` |
 | `GET`  | `/data/query`              | Query Historical Orders Database | 
 | `GET`  | `/data/details/{orderHash}`| Query Single Orders Database | -                |
 | `GET`  | `/data/status/{orderHash}` | Get Swap Details/Status          | -                |
@@ -361,6 +370,40 @@ curl -X POST https://api.aori.io/swap \
   "createdAt": "1700000000"
 }
 ```
+
+### `/cancel`
+
+The cancel endpoint provides pre-calculated transaction data for cancelling orders. This endpoint handles all the complex logic including chain detection, LayerZero fee calculation, and ABI encoding.
+
+#### Example Cancel Request
+
+```bash
+curl -X POST https://api.aori.io/cancel \
+-H "Content-Type: application/json" \
+-H "x-api-key: your_api_key_here" \
+-d '{
+    "orderHash": "0x89f0b7fcb38e0b97fb66701579583c038031c3034abfa8ff75e0f8914f65ccf3"
+}'
+```
+
+#### Example Cancel Response
+
+```json
+{
+  "orderHash": "0x89f0b7fcb38e0b97fb66701579583c038031c3034abfa8ff75e0f8914f65ccf3",
+  "to": "0x5f4e18f8D3D3952A02FBBE7cb9800D189059F66d",
+  "data": "0x983f7fd189f0b7fcb38e0b97fb66701579583c038031c3034abfa8ff75e0f8914f65ccf3...",
+  "value": "74173060168071",
+  "chain": "ethereum"
+}
+```
+
+The response provides all the data needed to execute the cancellation transaction:
+- `orderHash`: The order being cancelled
+- `to`: Contract address to send the transaction to
+- `data`: Encoded function call data
+- `value`: Transaction value (LayerZero fees for cross-chain cancellations)
+- `chain`: The chain where the cancellation should be executed
 
 ### `/data`
 
@@ -604,6 +647,9 @@ await aori.loadTokens();            // Load all tokens
 | `getOrder` | Fetches order details and parses into Order object | `orderHash: string, options?: { signal?: AbortSignal }` | `Promise<Order>` |
 | `parseOrder` | Parses QuoteResponse/SwapResponse/OrderDetails into Order object | `order: QuoteResponse \| SwapResponse \| OrderDetails` | `Promise<Order>` |
 | `queryOrders` | Queries orders with filtering criteria | `params: QueryOrdersParams, options?: { signal?: AbortSignal }` | `Promise<QueryOrdersResponse>` |
+| `cancelOrder` | Cancels an order by executing the cancellation transaction | `orderHash: string, txExecutor: CancelTxExecutor, options?: { signal?: AbortSignal }` | `Promise<CancelOrderResponse>` |
+| `getCancelTx` | Gets cancellation transaction data from the API | `orderHash: string, options?: { signal?: AbortSignal }` | `Promise<CancelTx>` |
+| `canCancel` | Checks if an order can be cancelled based on its state | `orderHash: string, options?: { signal?: AbortSignal }` | `Promise<boolean>` |
 | `connect` | Connects to the WebSocket server | `filter?: SubscriptionParams, callbacks?: WebSocketCallbacks` | `Promise<void>` |
 | `disconnect` | Disconnects from the WebSocket server | - | `void` |
 | `isConnected` | Checks if WebSocket is connected | - | `boolean` |
@@ -639,6 +685,9 @@ For simple operations without maintaining state, use these standalone functions:
 | `getOrder` | Fetches order details and parses into Order object | `orderHash: string, chains?: Record<string, ChainInfo>, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<Order>` |
 | `parseOrder` | Parses QuoteResponse/SwapResponse/OrderDetails into Order object | `order: QuoteResponse \| SwapResponse \| OrderDetails, chains?: Record<string, ChainInfo>, baseUrl?: string, apiKey?: string` | `Promise<Order>` |
 | `queryOrders` | Queries orders with filtering criteria | `baseUrl: string, params: QueryOrdersParams, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<QueryOrdersResponse>` |
+| `cancelOrder` | Cancels an order by executing the cancellation transaction | `orderHashOrCancelTx: string \| CancelTx, txExecutor: CancelTxExecutor, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<CancelOrderResponse>` |
+| `getCancelTx` | Gets cancellation transaction data from the API | `orderHash: string, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<CancelTx>` |
+| `canCancel` | Checks if an order can be cancelled based on its state | `orderHash: string, orderDetails?: OrderDetails, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<boolean>` |
 | `fetchAllChains` | Fetches the list of supported chains | `baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<Record<string, ChainInfo>>` |
 | `getDomain` | Fetches EIP-712 domain information for typed data signing | `baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<DomainInfo>` |
 | `getChain` | Fetches the chain information for a specific chain | `chain: string \| number, baseUrl?: string, apiKey?: string, options?: { signal?: AbortSignal }` | `Promise<ChainInfo>` |
@@ -768,6 +817,105 @@ async function executeSwap() {
 }
 
 executeSwap().catch(console.error);
+```
+
+### Cancelling an Order
+
+This example demonstrates how to cancel an order using the SDK's cancellation functionality:
+
+```typescript
+import { Aori } from '@aori/aori-ts';
+import { useWalletClient } from 'wagmi';
+
+async function cancelOrderExample() {
+  const apiKey = process.env.AORI_API_KEY;
+  const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+  
+  const orderHash = "0x89f0b7fcb38e0b97fb66701579583c038031c3034abfa8ff75e0f8914f65ccf3";
+  
+  // 1. Check if the order can be cancelled
+  const canCancel = await aori.canCancel(orderHash);
+  if (!canCancel) {
+    console.log("Order cannot be cancelled - it may be completed, already cancelled, or expired");
+    return;
+  }
+  
+  // 2. Get cancellation transaction data
+  const cancelTx = await aori.getCancelTx(orderHash);
+  console.log(`Cancellation requires ${cancelTx.chain} network`);
+  console.log(`LayerZero fee: ${cancelTx.value === "0" ? "0 ETH (single-chain)" : `${Number(cancelTx.value) / 1e18} ETH`}`);
+  
+  // 3. Create transaction executor (using wagmi as example)
+  const walletClient = await connector?.getWalletClient();
+  
+  const txExecutor = {
+    address: userAddress,
+    getChainId: async () => walletClient.chain?.id || 0,
+    sendTransaction: async (request) => {
+      const hash = await walletClient.sendTransaction({
+        to: request.to,
+        data: request.data,
+        value: BigInt(request.value),
+        gas: request.gasLimit ? BigInt(request.gasLimit) : undefined,
+      });
+      
+      return {
+        hash,
+        wait: async () => {
+          const { waitForTransactionReceipt } = await import('viem/actions');
+          return await waitForTransactionReceipt(walletClient, { hash });
+        }
+      };
+    },
+    estimateGas: async (request) => {
+      const { estimateGas } = await import('viem/actions');
+      return await estimateGas(walletClient, {
+        to: request.to,
+        data: request.data,
+        value: BigInt(request.value),
+      });
+    }
+  };
+  
+  // 4. Execute the cancellation
+  try {
+    const result = await aori.cancelOrder(orderHash, txExecutor);
+    
+    if (result.success) {
+      console.log(`✅ Order cancelled successfully!`);
+      console.log(`Transaction hash: ${result.txHash}`);
+      console.log(`Cross-chain: ${result.isCrossChain ? 'Yes' : 'No'}`);
+      if (result.fee) {
+        console.log(`LayerZero fee paid: ${Number(result.fee) / 1e18} ETH`);
+      }
+    } else {
+      console.error(`❌ Cancellation failed: ${result.error}`);
+    }
+  } catch (error) {
+    console.error('Cancellation error:', error);
+  }
+}
+
+// Usage with standalone functions
+import { canCancel, getCancelTx, cancelOrder } from '@aori/aori-ts';
+
+async function cancelOrderStandalone() {
+  const apiKey = process.env.AORI_API_KEY;
+  const orderHash = "0x89f0b7fcb38e0b97fb66701579583c038031c3034abfa8ff75e0f8914f65ccf3";
+  
+  // Check cancellability
+  const canCancelResult = await canCancel(orderHash, undefined, 'https://api.aori.io', apiKey);
+  if (!canCancelResult) return;
+  
+  // Get cancel data
+  const cancelTx = await getCancelTx(orderHash, 'https://api.aori.io', apiKey);
+  
+  // Execute cancellation
+  const result = await cancelOrder(orderHash, txExecutor, 'https://api.aori.io', apiKey);
+  console.log('Cancellation result:', result);
+}
+
+cancelOrderExample().catch(console.error);
 ```
 
 ### Executing an Order with a Wallet in a frontend application

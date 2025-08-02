@@ -104,6 +104,12 @@ export interface TxExecutor {
     estimateGas?(request: TransactionRequest): Promise<bigint>;
 }
 
+export interface CancelTxExecutor extends TxExecutor {
+    address?: string; // Optional: caller's address for more accurate fee estimation
+    call?(request: { to: string; data: string }): Promise<string>; // For contract read calls (quote function)
+    getChainId?(): Promise<number>; // Optional: get current chain ID for validation
+}
+
 export interface NativeSwapConfig {
     type: 'native';
     txExecutor: TxExecutor;
@@ -127,6 +133,22 @@ export interface Order {
     dstEid: number;
     offerer: string;
     recipient: string;
+}
+
+export interface CancelOrderResponse {
+    success: boolean;
+    txHash: string;
+    isCrossChain: boolean;
+    fee?: string; // LayerZero fee for cross-chain cancellations
+    error?: string;
+}
+
+export interface CancelTx {
+    orderHash: string;
+    to: string;
+    data: string;
+    value: string;
+    chain: string;
 }
 
 
@@ -190,7 +212,8 @@ export type OrderStatus =
     | { status: 'pending', timestamp: number }
     | { status: 'received', txHash: string, txUrl: string, timestamp: number }
     | { status: 'completed', txHash: string, txUrl: string, timestamp: number }
-    | { status: 'failed', error: string, timestamp: number };
+    | { status: 'failed', error: string, timestamp: number }
+    | { status: 'cancelled', timestamp: number };
 
 export interface OrderPendingStatus {
     status: "pending";

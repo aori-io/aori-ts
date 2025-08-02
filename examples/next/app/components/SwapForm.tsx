@@ -130,12 +130,47 @@ export function SwapForm() {
       }
     }
 
-    // Clear quote and approval status when form changes
-    if (field !== 'inputAmount' || value !== formData.inputAmount) {
-      setQuote(null)
-      setApprovalStatus({ isApproved: false, allowance: '0', checking: false })
+      // Clear quote and approval status when form changes
+  if (field !== 'inputAmount' || value !== formData.inputAmount) {
+    setQuote(null)
+    setApprovalStatus({ isApproved: false, allowance: '0', checking: false })
+  }
+}, [formData.inputAmount, getTokensByChain, isConnected, walletClient, getChainInfo, switchChain])
+
+// Check token approval when form is complete and valid
+useEffect(() => {
+  const checkApprovalIfNeeded = async () => {
+    if (!mounted || !address || !walletClient || !inputTokenInfo || !formData.inputAmount) {
+      return
     }
-  }, [formData.inputAmount, getTokensByChain, isConnected, walletClient, getChainInfo, switchChain])
+
+    const inputChainInfo = getChainInfo(formData.inputChain)
+    if (!inputChainInfo) return
+
+    // Skip approval check for native tokens
+    if (isNativeToken(inputTokenInfo.address)) {
+      setApprovalStatus({
+        isApproved: true,
+        allowance: 'N/A (Native Token)',
+        checking: false
+      })
+      return
+    }
+
+    try {
+      const inputAmountWei = parseUnits(formData.inputAmount, getTokenDecimals(inputTokenInfo)).toString()
+      await checkTokenApproval(
+        inputTokenInfo.address as Address,
+        inputChainInfo.address as Address,
+        inputAmountWei
+      )
+    } catch (error) {
+      console.error('Failed to check approval:', error)
+    }
+  }
+
+  checkApprovalIfNeeded()
+}, [mounted, address, walletClient, inputTokenInfo, formData.inputAmount, formData.inputChain, getChainInfo, isNativeToken, getTokenDecimals]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const swapTokens = useCallback(() => {
     setFormData(prev => ({
@@ -225,19 +260,8 @@ export function SwapForm() {
 
       if (isNativeSwap) {
         setStatusMessage(`Quote received (Native Swap): ${outputAmountFormatted} ${outputTokenInfo.symbol}`)
-        setApprovalStatus({ isApproved: true, allowance: 'N/A', checking: false })
       } else {
         setStatusMessage(`Quote received: ${outputAmountFormatted} ${outputTokenInfo.symbol}`)
-
-        // Check token approval for ERC20 tokens only
-        const inputChainInfo = getChainInfo(formData.inputChain)
-        if (inputChainInfo) {
-          await checkTokenApproval(
-            inputTokenInfo.address as Address,
-            inputChainInfo.address as Address,
-            inputAmountWei
-          )
-        }
       }
 
       setStatus('idle')
@@ -391,28 +415,6 @@ export function SwapForm() {
 
       } else {
         // ERC20 token swap flow - executeSwap will handle signing + submission
-        setStatus('checking-approval')
-        setStatusMessage('Checking token approval...')
-
-        const isApproved = await checkTokenApproval(
-          inputTokenInfo.address as Address,
-          inputChainInfo.address as Address,
-          inputAmountWei
-        )
-
-        if (!isApproved) {
-          const approvalSuccess = await requestTokenApproval(
-            inputTokenInfo.address as Address,
-            inputChainInfo.address as Address
-          )
-
-          if (!approvalSuccess) {
-            setStatus('error')
-            setStatusMessage('Token approval failed. Cannot proceed with swap.')
-            return
-          }
-        }
-
         setStatus('signing')
         setStatusMessage('Signing and submitting swap...')
 
@@ -487,6 +489,38 @@ export function SwapForm() {
       setStatusMessage(`Swap failed: ${errorMessage}`)
     }
   }, [quote, address, walletClient, aori, inputTokenInfo, outputTokenInfo, formData, getChainInfo, getTokenDecimals, switchChain])
+
+  const handleApprove = useCallback(async () => {
+    if (!inputTokenInfo || !formData.inputAmount || !address || !walletClient) {
+      setStatusMessage('Missing requirements for approval')
+      return
+    }
+
+    const inputChainInfo = getChainInfo(formData.inputChain)
+    if (!inputChainInfo) {
+      setStatusMessage('Invalid chain configuration')
+      return
+    }
+
+    const approvalSuccess = await requestTokenApproval(
+      inputTokenInfo.address as Address,
+      inputChainInfo.address as Address
+    )
+
+    if (approvalSuccess) {
+      // Recheck approval status after successful approval
+      try {
+        const inputAmountWei = parseUnits(formData.inputAmount, getTokenDecimals(inputTokenInfo)).toString()
+        await checkTokenApproval(
+          inputTokenInfo.address as Address,
+          inputChainInfo.address as Address,
+          inputAmountWei
+        )
+      } catch (error) {
+        console.error('Failed to recheck approval:', error)
+      }
+    }
+  }, [inputTokenInfo, formData.inputAmount, formData.inputChain, address, walletClient, getChainInfo, getTokenDecimals])
 
   const requestTokenApproval = async (tokenAddress: Address, spenderAddress: Address) => {
     if (!address || !walletClient) return false
@@ -692,7 +726,7 @@ export function SwapForm() {
             )}
 
             {/* Approval Status */}
-            {quote && !isNativeSwapFlow && (
+            {inputTokenInfo && !isInputTokenNative && formData.inputAmount && (
               <div className={`status-message ${approvalStatus.isApproved ? 'status-success' :
                   approvalStatus.checking ? 'status-info' :
                     'status-warning'
@@ -703,7 +737,7 @@ export function SwapForm() {
                   ) : approvalStatus.isApproved ? (
                     <span>✅ Token approved for spending</span>
                   ) : (
-                    <span>⚠️ Token approval required</span>
+                    <span>⚠️ Token approval required before getting quote</span>
                   )}
                 </p>
               </div>
@@ -711,26 +745,39 @@ export function SwapForm() {
 
             {/* Action Buttons */}
             <div className="form-row">
+              {/* Approve Button - Show when ERC20 token needs approval */}
+              {inputTokenInfo && !isInputTokenNative && !approvalStatus.isApproved && formData.inputAmount && (
+                <button
+                  onClick={handleApprove}
+                  disabled={isLoading || approvalStatus.checking}
+                  className="btn btn-warning btn-flex"
+                >
+                  {status === 'approving' ? "Approving Token..." : 
+                   approvalStatus.checking ? "Checking..." : 
+                   "Approve Token"}
+                </button>
+              )}
+              
               <button
                 onClick={handleGetQuote}
-                disabled={!formData.inputToken || !formData.outputToken || !formData.inputAmount || isLoading}
+                disabled={!formData.inputToken || !formData.outputToken || !formData.inputAmount || isLoading || 
+                         (inputTokenInfo && !isInputTokenNative && !approvalStatus.isApproved)}
                 className="btn btn-primary btn-flex"
               >
                 {status === 'getting-quote' ? "Getting Quote..." : "Get Quote"}
               </button>
+              
               <button
                 onClick={handleSwap}
                 disabled={!quote || isLoading}
                 className={`btn btn-flex ${isNativeSwapFlow ? 'btn-orange' : 'btn-secondary'
                   }`}
               >
-                {status === 'checking-approval' ? "Checking Approval..." :
-                  status === 'approving' ? "Approving Token..." :
-                    status === 'signing' ? "Sign Transaction..." :
-                      status === 'submitting' ? "Submitting..." :
-                        status === 'executing-native' ? "Executing Native Swap..." :
-                            isLoading ? "Processing..." :
-                              isNativeSwapFlow ? "⚡ Execute Native Swap" : "Swap"}
+                {status === 'signing' ? "Sign Transaction..." :
+                  status === 'submitting' ? "Submitting..." :
+                    status === 'executing-native' ? "Executing Native Swap..." :
+                      isLoading ? "Processing..." :
+                        isNativeSwapFlow ? "⚡ Execute Native Swap" : "Swap"}
               </button>
             </div>
           </div>
