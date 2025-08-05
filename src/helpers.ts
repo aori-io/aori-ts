@@ -1125,7 +1125,26 @@ export async function queryOrders(
     const url = new URL('data/query', baseUrl);
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined) {
-        url.searchParams.set(key, String(value));
+        let formattedValue: string;
+        
+        // Checksum addresses for token parameters
+        if ((key === 'inputToken' || key === 'outputToken') && typeof value === 'string') {
+          try {
+            formattedValue = ethers.getAddress(value); // This checksums the address
+          } catch (error) {
+            throw new Error(`Invalid address format for ${key}: ${value}`);
+          }
+        }
+        // Lowercase chain names
+        else if ((key === 'inputChain' || key === 'outputChain') && typeof value === 'string') {
+          formattedValue = value.toLowerCase();
+        }
+        // Keep other values as-is
+        else {
+          formattedValue = String(value);
+        }
+        
+        url.searchParams.set(key, formattedValue);
       }
     }
     const response = await http({
