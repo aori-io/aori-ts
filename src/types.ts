@@ -364,7 +364,8 @@ export enum WSEventType {
     Created = "created",
     Received = "received", 
     Completed = "completed",
-    Failed = "failed"
+    Failed = "failed",
+    Cancelled = "cancelled"
 }
 
 /**
