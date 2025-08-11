@@ -158,6 +158,7 @@ export class Aori {
   // eslint-disable-next-line no-dupe-class-members
   public static async create(options: AoriCreateOptions): Promise<Aori>
 
+  // eslint-disable-next-line no-dupe-class-members
   public static async create(
     apiBaseUrlOrOptions?: string | AoriCreateOptions,
     wsBaseUrl?: string,
