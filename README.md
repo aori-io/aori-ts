@@ -77,7 +77,70 @@ aori.disconnect();
 
 ## Usage Patterns
 
-The SDK supports two usage patterns:
+The SDK supports two usage patterns and two initialization formats:
+
+### Initialization Formats
+
+#### Options Object Format (Recommended)
+
+The options object format provides better developer experience with named parameters:
+
+```typescript
+import { Aori } from '@aori/aori-ts';
+
+// Simple initialization
+const aori = await Aori.create({});
+
+// With API key only
+const aori = await Aori.create({
+  apiKey: process.env.AORI_API_KEY
+});
+
+// With custom endpoints
+const aori = await Aori.create({
+  apiBaseUrl: 'https://staging-api.aori.io',
+  wsBaseUrl: 'wss://staging-ws.aori.io',
+  apiKey: process.env.STAGING_API_KEY
+});
+
+// With token pre-loading
+const aori = await Aori.create({
+  apiKey: process.env.AORI_API_KEY,
+  loadTokens: true
+});
+
+// Advanced: custom chains and domain
+const aori = await Aori.create({
+  apiKey: process.env.AORI_API_KEY,
+  chains: myCustomChains,
+  domain: myCustomDomain,
+  loadTokens: true
+});
+```
+
+#### Legacy Parameter Format
+
+The original parameter format is still supported for backward compatibility:
+
+```typescript
+// Simple initialization
+const aori = await Aori.create();
+
+// With API key
+const aori = await Aori.create(
+  'https://api.aori.io',
+  'wss://api.aori.io',
+  process.env.AORI_API_KEY
+);
+
+// With token pre-loading
+const aori = await Aori.create(
+  'https://api.aori.io',
+  'wss://api.aori.io',
+  process.env.AORI_API_KEY,
+  true  // loadTokens
+);
+```
 
 ### 1. Stateful Usage with Aori Class
 
@@ -88,6 +151,13 @@ import { Aori } from '@aori/aori-ts';
 
 // Create an Aori instance with API key
 const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+
+// Or use the new options object format
+const aori = await Aori.create({
+  apiBaseUrl: 'https://api.aori.io',
+  wsBaseUrl: 'wss://api.aori.io',
+  apiKey: apiKey
+});
 
 // Use the instance methods
 const quote = await aori.getQuote(quoteRequest);
@@ -597,14 +667,30 @@ The `Aori` class provides a stateful interface for interacting with the Aori API
 
 #### Constructor and Initialization
 
+The `Aori.create()` method supports two calling patterns:
+
+**Legacy Parameter Format:**
 ```typescript
-// Create an Aori instance with automatic chain and domain fetching
 const aori = await Aori.create(
   apiBaseUrl?: string,    // Default: 'https://api.aori.io'
   wsBaseUrl?: string,     // Default: 'wss://api.aori.io'
   apiKey?: string,        // Optional API key
-  loadTokens?: boolean    // Optional: load all tokens during initialization
+  loadTokens?: boolean,   // Optional: load all tokens during initialization
+  chains?: Record<string, ChainInfo>,  // Optional: custom chains
+  domain?: DomainInfo     // Optional: custom domain info
 );
+```
+
+**Options Object Format (Recommended):**
+```typescript
+const aori = await Aori.create({
+  apiBaseUrl?: string,    // Default: 'https://api.aori.io'
+  wsBaseUrl?: string,     // Default: 'wss://api.aori.io'
+  apiKey?: string,        // Optional API key
+  loadTokens?: boolean,   // Optional: load all tokens during initialization
+  chains?: Record<string, ChainInfo>,  // Optional: custom chains
+  domain?: DomainInfo     // Optional: custom domain info
+});
 ```
 
 The `loadTokens` parameter allows you to pre-load all tokens during initialization:
@@ -613,7 +699,7 @@ The `loadTokens` parameter allows you to pre-load all tokens during initializati
 // Don't load tokens (default behavior)
 const aori = await Aori.create();
 
-// Load all tokens across all chains
+// Legacy format - Load all tokens across all chains
 const aoriWithAllTokens = await Aori.create(
   'https://api.aori.io',
   'wss://api.aori.io', 
@@ -621,8 +707,16 @@ const aoriWithAllTokens = await Aori.create(
   true  // Load all tokens
 );
 
+// Options object format - Load all tokens
+const aoriWithAllTokens = await Aori.create({
+  apiBaseUrl: 'https://api.aori.io',
+  wsBaseUrl: 'wss://api.aori.io',
+  apiKey: apiKey,
+  loadTokens: true
+});
+
 // For specific chains, load them after creation
-const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+const aori = await Aori.create({ apiKey });
 
 // Load tokens for specific chains using instance method
 await aori.loadTokens('ethereum');  // Load Ethereum tokens
@@ -718,12 +812,19 @@ This example demonstrates how to use the Aori class for stateful API interaction
 import { Aori } from '@aori/aori-ts';
 
 async function executeSwapWithClass() {
-  // Create Aori instance with API key
+  // Create Aori instance with API key (legacy format)
   const aori = await Aori.create(
     'https://api.aori.io',
     'wss://api.aori.io',
     process.env.AORI_API_KEY
   );
+
+  // Or using options object (recommended)
+  const aori = await Aori.create({
+    apiBaseUrl: 'https://api.aori.io',
+    wsBaseUrl: 'wss://api.aori.io',
+    apiKey: process.env.AORI_API_KEY
+  });
   
   // Create a quote request
   const quoteRequest = {
@@ -829,7 +930,11 @@ import { useWalletClient } from 'wagmi';
 
 async function cancelOrderExample() {
   const apiKey = process.env.AORI_API_KEY;
-  const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+  const aori = await Aori.create({
+    apiBaseUrl: 'https://api.aori.io',
+    wsBaseUrl: 'wss://api.aori.io',
+    apiKey
+  });
   
   const orderHash = "0x89f0b7fcb38e0b97fb66701579583c038031c3034abfa8ff75e0f8914f65ccf3";
   
@@ -943,8 +1048,12 @@ function SwapComponentWithClass() {
 
   const handleSwap = async () => {
     try {
-      // Create Aori instance
-      const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+      // Create Aori instance using options object
+      const aori = await Aori.create({
+        apiBaseUrl: 'https://api.aori.io',
+        wsBaseUrl: 'wss://api.aori.io',
+        apiKey
+      });
 
       // 1. Get the quote first
       const quoteRequest = {
@@ -1256,7 +1365,11 @@ This example demonstrates how to use `getAllChains()` to build applications that
 import { Aori } from '@aori/aori-ts';
 
 async function buildMultiChainApp() {
-  const aori = await Aori.create('https://api.aori.io', 'wss://api.aori.io', apiKey);
+  const aori = await Aori.create({
+    apiBaseUrl: 'https://api.aori.io',
+    wsBaseUrl: 'wss://api.aori.io',
+    apiKey
+  });
   
   // Get all supported chains
   const allChains = aori.getAllChains();

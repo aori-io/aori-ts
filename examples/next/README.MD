@@ -2,9 +2,14 @@
 
 A comprehensive Next.js application showcasing all features of the Aori TypeScript SDK.
 
-## Local Development Setup
+## Features
 
-This example app is configured to use the **local SDK source files** instead of the published npm package. This allows you to test SDK changes in real-time without needing to publish.
+- **Modern Options API**: Uses the new `Aori.create()` options object format for cleaner configuration
+- **Real-time Swaps**: Complete swap workflow with quote → sign → submit → monitor
+- **Token Management**: Automatic token loading and caching
+- **Order Cancellation**: Cancel order demo with real transaction execution
+- **Responsive UI**: Custom CSS design system with dark/light themes
+- **Wallet Integration**: WalletConnect v2 with wagmi hooks
 
 ### Configuration Details
 
@@ -28,17 +33,29 @@ npm run dev
 
 The app will automatically use your local SDK changes - no rebuild or republish required!
 
+### SDK Usage Example
+
+This example demonstrates the new options object approach for creating Aori instances:
+
+```typescript
+// AoriProvider.tsx
+const aoriPromise = Aori.create({
+  apiBaseUrl: process.env.NEXT_PUBLIC_AORI_API_URL,
+  wsBaseUrl: process.env.NEXT_PUBLIC_AORI_WS_URL,
+  apiKey: process.env.NEXT_PUBLIC_AORI_API_KEY,
+  loadTokens: true
+})
+```
+
+**Benefits of the options object approach:**
+- Self-documenting parameter names
+- Only specify needed configuration
+- No need for `undefined` placeholders
+- Better TypeScript autocompletion
+
 ### Environment Variables
 
 - `NEXT_PUBLIC_AORI_API_URL`: Aori API base URL (defaults to dev environment)
 - `NEXT_PUBLIC_AORI_WS_URL`: Aori WebSocket URL (defaults to dev environment)
 - `NEXT_PUBLIC_AORI_API_KEY`: Optional API key for enhanced features
 - `NEXT_PUBLIC_PROJECT_ID`: WalletConnect project ID
-
-### Features Demonstrated
-
-- Cross-chain swaps
-- Real-time order tracking via WebSocket
-- Token selection and approval
-- Order signing with wallet integration
-- Complete swap lifecycle management

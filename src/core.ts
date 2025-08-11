@@ -31,6 +31,24 @@ import {
 } from './constants';
 
 /**
+ * Configuration options for creating an Aori instance
+ */
+export interface AoriCreateOptions {
+  /** The base URL of the API */
+  apiBaseUrl?: string;
+  /** The base URL of the WebSocket API */
+  wsBaseUrl?: string;
+  /** Optional API key for authentication */
+  apiKey?: string;
+  /** Optional boolean to load all tokens during initialization. Default: false */
+  loadTokens?: boolean;
+  /** Optional chains mapping to use instead of fetching from API. If provided, no API call is made for chains. */
+  chains?: Record<string, ChainInfo>;
+  /** Optional domain info for EIP-712. If provided, no API call is made for domain. */
+  domain?: DomainInfo;
+}
+
+/**
  * Aori is the main class for interacting with the Aori API
  */
 export class Aori {
@@ -97,29 +115,92 @@ export class Aori {
    * @example
    * // Load tokens and use custom chains and domain
    * const aori = await Aori.create(AORI_API, AORI_WS_API, apiKey, true, customChains, customDomain)
+   * 
+   * @example
+   * // Using options object - Standard usage (fetches chains and domain from API)
+   * const aori = await Aori.create({})
+   * 
+   * @example
+   * // Using options object - Only specify API key and load tokens
+   * const aori = await Aori.create({
+   *   apiKey: 'your-api-key',
+   *   loadTokens: true
+   * })
+   * 
+   * @example
+   * // Using options object - Custom API URL with token loading
+   * const aori = await Aori.create({
+   *   apiBaseUrl: 'https://custom-api.example.com',
+   *   wsBaseUrl: 'wss://custom-ws.example.com',
+   *   loadTokens: true,
+   *   apiKey: 'your-api-key'
+   * })
+   * 
+   * @example
+   * // Using options object - Pre-defined chains and domain
+   * const aori = await Aori.create({
+   *   chains: customChains,
+   *   domain: customDomain,
+   *   loadTokens: true
+   * })
    */
+  public static async create(): Promise<Aori>
   public static async create(
-    apiBaseUrl: string = AORI_API, 
-    wsBaseUrl: string = AORI_WS_API, 
+    apiBaseUrl: string, 
+    wsBaseUrl?: string, 
     apiKey?: string,
     loadTokens?: boolean,
     chains?: Record<string, ChainInfo>,
     domain?: DomainInfo
-  ) {
+  ): Promise<Aori>
+  public static async create(options: AoriCreateOptions): Promise<Aori>
+
+  public static async create(
+    apiBaseUrlOrOptions?: string | AoriCreateOptions,
+    wsBaseUrl?: string,
+    apiKey?: string,
+    loadTokens?: boolean,
+    chains?: Record<string, ChainInfo>,
+    domain?: DomainInfo
+  ): Promise<Aori> {
+    let resolvedOptions: AoriCreateOptions;
+
+    // Check if first argument is an options object
+    if (typeof apiBaseUrlOrOptions === 'object') {
+      resolvedOptions = apiBaseUrlOrOptions;
+    } else {
+      // input parameter format or no arguments
+      resolvedOptions = {
+        apiBaseUrl: apiBaseUrlOrOptions ?? AORI_API,
+        wsBaseUrl: wsBaseUrl ?? AORI_WS_API,
+        apiKey,
+        loadTokens: loadTokens ?? false,
+        chains,
+        domain
+      };
+    }
+
     // Use provided chains or fetch from API
     // Use provided domain or fetch from API
     const [resolvedChains, resolvedDomain] = await Promise.all([
-      chains ? Promise.resolve(chains) : fetchAllChains(apiBaseUrl, apiKey),
-      domain ? Promise.resolve(domain) : getDomain(apiBaseUrl, apiKey)
+      resolvedOptions.chains ? Promise.resolve(resolvedOptions.chains) : fetchAllChains(resolvedOptions.apiBaseUrl ?? AORI_API, resolvedOptions.apiKey),
+      resolvedOptions.domain ? Promise.resolve(resolvedOptions.domain) : getDomain(resolvedOptions.apiBaseUrl ?? AORI_API, resolvedOptions.apiKey)
     ]);
 
     // Conditionally fetch all tokens
     let tokens: TokenInfo[] = [];
-    if (loadTokens === true) {
-      tokens = await fetchAllTokens(apiBaseUrl, apiKey);
+    if (resolvedOptions.loadTokens === true) {
+      tokens = await fetchAllTokens(resolvedOptions.apiBaseUrl ?? AORI_API, resolvedOptions.apiKey);
     }
 
-    return new Aori(resolvedChains, resolvedDomain, apiBaseUrl, wsBaseUrl, apiKey, tokens);
+    return new Aori(
+      resolvedChains, 
+      resolvedDomain, 
+      resolvedOptions.apiBaseUrl ?? AORI_API, 
+      resolvedOptions.wsBaseUrl ?? AORI_WS_API, 
+      resolvedOptions.apiKey, 
+      tokens
+    );
   }
 
   /**
@@ -340,6 +421,7 @@ export class Aori {
    * @param request The swap request
    * @param options Optional parameters including AbortSignal
    * @returns The swap response
+   
    */
   public async submitSwap(request: SwapRequest, options: { signal?: AbortSignal } = {}) {
     return await submitSwap(request, this.apiBaseUrl, this.apiKey, options);

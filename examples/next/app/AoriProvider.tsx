@@ -5,20 +5,13 @@ import { Aori } from '@aori/aori-ts'
 
 const AoriContext = createContext<Aori | null>(null)
 
-// Initialize Aori instance at module level
-const apiKey = process.env.NEXT_PUBLIC_AORI_API_KEY
-const apiBaseUrl = process.env.NEXT_PUBLIC_AORI_API_URL
-const wsBaseUrl = process.env.NEXT_PUBLIC_AORI_WS_URL
-
-// Define create parameters
-const loadTokens = true;
-
-const aoriPromise = Aori.create(
-  apiBaseUrl,
-  wsBaseUrl,
-  apiKey || undefined,
-  loadTokens,
-)
+// Initialize Aori instance at module level using options object
+const aoriPromise = Aori.create({
+  apiBaseUrl: process.env.NEXT_PUBLIC_AORI_API_URL,
+  wsBaseUrl: process.env.NEXT_PUBLIC_AORI_WS_URL,
+  apiKey: process.env.NEXT_PUBLIC_AORI_API_KEY,
+  loadTokens: true
+})
 
 export function useAori() {
   const context = useContext(AoriContext)
