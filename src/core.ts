@@ -144,7 +144,9 @@ export class Aori {
    *   loadTokens: true
    * })
    */
+  // eslint-disable-next-line no-dupe-class-members
   public static async create(): Promise<Aori>
+  // eslint-disable-next-line no-dupe-class-members
   public static async create(
     apiBaseUrl: string, 
     wsBaseUrl?: string, 
@@ -153,6 +155,7 @@ export class Aori {
     chains?: Record<string, ChainInfo>,
     domain?: DomainInfo
   ): Promise<Aori>
+  // eslint-disable-next-line no-dupe-class-members
   public static async create(options: AoriCreateOptions): Promise<Aori>
 
   public static async create(
