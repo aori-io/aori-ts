@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
-import { useAori } from '../providers/AoriProvider'
+import { useAori } from '../AoriProvider'
 import type { SubscriptionParams, WebSocketCallbacks } from '@aori/aori-ts'
 
 type ActivityItem = {

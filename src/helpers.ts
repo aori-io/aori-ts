@@ -1250,7 +1250,6 @@ export async function canCancel(
     const resolvedOrderDetails = orderDetails || await getOrderDetails(orderHash, baseUrl, apiKey, { signal });
 
     if (!resolvedOrderDetails.events || !Array.isArray(resolvedOrderDetails.events)) {
-      console.warn('Order has no events array:', orderHash);
       return false;
     }
 
@@ -1275,22 +1274,11 @@ export async function canCancel(
     // 3. It has not expired (current time <= endTime)
     const canBeCancelled = hasReceivedEvent && !hasCompletedEvent && !hasCancelledEvent && !hasExpired;
 
-    console.log('Cancellation check for order:', {
-      orderHash,
-      events: eventTypes,
-      hasReceivedEvent,
-      hasCompletedEvent,
-      hasCancelledEvent,
-      hasExpired,
-      currentTime,
-      endTime,
-      canBeCancelled
-    });
+
 
     return canBeCancelled;
 
   } catch (error) {
-    console.error('Failed to check if order can be cancelled:', error);
     return false;
   }
 }
@@ -1361,32 +1349,13 @@ export async function cancelOrder(
       cancelResponse = cancelTx;
     } else if (orderHash) {
       // Only orderHash provided, need to fetch cancel data
-      try {
-        cancelResponse = await getCancelTx(orderHash, baseUrl, apiKey, { signal });
-      } catch (error) {
-        // Re-throw the original error without additional wrapping to preserve server message
-        throw error;
-      }
+      cancelResponse = await getCancelTx(orderHash, baseUrl, apiKey, { signal });
     } else {
       // This should never happen due to the earlier validation, but TypeScript doesn't know that
       throw new Error("No order provided: either orderHash or cancelTx must be specified");
     }
 
-    // Validate chain if possible
-    if (txExecutor.getChainId) {
-      try {
-        const currentChainId = await txExecutor.getChainId();
-        console.log('Cancel transaction debug info:', {
-          orderHash: cancelResponse.orderHash,
-          requiredChain: cancelResponse.chain,
-          currentChainId,
-          contractAddress: cancelResponse.to,
-          transactionValue: cancelResponse.value
-        });
-      } catch (error) {
-        console.warn('Could not get current chain ID for validation:', error);
-      }
-    }
+    
 
     // Construct transaction request
     const transactionRequest: TransactionRequest = {

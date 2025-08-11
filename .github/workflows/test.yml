@@ -50,26 +50,4 @@ jobs:
         npm install ${{ github.workspace }}/*.tgz
         node -e "const aori = require('@aori/aori-ts'); console.log('✅ Package loads successfully')"
 
-  coverage:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-    
-    - name: Install dependencies
-      run: npm install
-    
-    - name: Run tests with coverage
-      run: npm run test:coverage
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage/lcov.info
-        flags: unittests
-        name: codecov-umbrella 
+ 

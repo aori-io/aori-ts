@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useAccount, useWalletClient, useSwitchChain } from 'wagmi'
-import { useAori } from '../providers/AoriProvider'
+import { useAori } from '../AoriProvider'
 import type {
   QuoteRequest,
   QuoteResponse,
@@ -59,9 +59,9 @@ export function SwapForm() {
   }>({ isApproved: false, allowance: '0', checking: false })
 
 
-  // Get data from Aori instance
-  const chains = aori ? aori.getAllChains() : {}
-  const tokens = aori ? aori.getAllTokens() : []
+  // Get data from Aori instance (only after hydration)
+  const chains = mounted && aori ? aori.getAllChains() : {}
+  const tokens = mounted && aori ? aori.getAllTokens() : []
   const chainKeys = Object.keys(chains)
 
   // Helper functions
@@ -90,13 +90,13 @@ export function SwapForm() {
     return 18
   }, [isNativeToken])
 
-  // Computed values
-  const inputTokenInfo = getTokenInfo(formData.inputToken, formData.inputChain)
-  const outputTokenInfo = getTokenInfo(formData.outputToken, formData.outputChain)
-  const isInputTokenNative = inputTokenInfo ? isNativeToken(inputTokenInfo.address) : false
-  const isNativeSwapFlow = quote ? aori?.isNativeSwap(quote) || false : false
+  // Computed values (only after hydration to prevent SSR mismatches)
+  const inputTokenInfo = mounted ? getTokenInfo(formData.inputToken, formData.inputChain) : undefined
+  const outputTokenInfo = mounted ? getTokenInfo(formData.outputToken, formData.outputChain) : undefined
+  const isInputTokenNative = mounted && inputTokenInfo ? isNativeToken(inputTokenInfo.address) : false
+  const isNativeSwapFlow = mounted && quote ? aori?.isNativeSwap(quote) || false : false
   const isLoading = status !== 'idle' && status !== 'completed' && status !== 'error'
-  const outputAmount = quote && outputTokenInfo
+  const outputAmount = mounted && quote && outputTokenInfo
     ? (Number(quote.outputAmount) / (10 ** getTokenDecimals(outputTokenInfo))).toFixed(Math.min(getTokenDecimals(outputTokenInfo), 8))
     : ''
 
@@ -117,30 +117,37 @@ export function SwapForm() {
       return newData
     })
 
-    // Switch to input chain when user selects it
-    if (field === 'inputChain' && value && isConnected && walletClient) {
-      const chainInfo = getChainInfo(value)
-      if (chainInfo && walletClient.chain?.id !== chainInfo.chainId) {
-        try {
-          await switchChain({ chainId: chainInfo.chainId })
-        } catch (error) {
-          console.error('Failed to switch chain:', error)
-          // Don't block the UI if chain switch fails
-        }
-      }
+    // Clear quote and approval status when form changes (use setTimeout to avoid setState during render)
+    if (field !== 'inputAmount' || value !== formData.inputAmount) {
+      setTimeout(() => {
+        setQuote(null)
+        setApprovalStatus({ isApproved: false, allowance: '0', checking: false })
+      }, 0)
     }
 
-      // Clear quote and approval status when form changes
-  if (field !== 'inputAmount' || value !== formData.inputAmount) {
-    setQuote(null)
-    setApprovalStatus({ isApproved: false, allowance: '0', checking: false })
-  }
-}, [formData.inputAmount, getTokensByChain, isConnected, walletClient, getChainInfo, switchChain])
+    // Switch to input chain when user selects it (also defer to avoid hydration issues)
+    if (field === 'inputChain' && value && isConnected && walletClient) {
+      setTimeout(async () => {
+        const chainInfo = getChainInfo(value)
+        if (chainInfo && walletClient.chain?.id !== chainInfo.chainId) {
+          try {
+            await switchChain({ chainId: chainInfo.chainId })
+          } catch (error) {
+            console.error('Failed to switch chain:', error)
+            // Don't block the UI if chain switch fails
+          }
+        }
+      }, 0)
+    }
+  }, [formData.inputAmount, getTokensByChain, isConnected, walletClient, getChainInfo, switchChain])
 
 // Check token approval when form is complete and valid
 useEffect(() => {
+  // Prevent running during SSR or before hydration
+  if (!mounted) return
+  
   const checkApprovalIfNeeded = async () => {
-    if (!mounted || !address || !walletClient || !inputTokenInfo || !formData.inputAmount) {
+    if (!address || !walletClient || !inputTokenInfo || !formData.inputAmount) {
       return
     }
 
@@ -172,20 +179,55 @@ useEffect(() => {
   checkApprovalIfNeeded()
 }, [mounted, address, walletClient, inputTokenInfo, formData.inputAmount, formData.inputChain, getChainInfo, isNativeToken, getTokenDecimals]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const swapTokens = useCallback(() => {
+  const swapTokens = useCallback(async () => {
+    const newInputChain = formData.outputChain
+    const newOutputChain = formData.inputChain
+    
     setFormData(prev => ({
-      inputChain: prev.outputChain,
-      outputChain: prev.inputChain,
+      inputChain: newInputChain,
+      outputChain: newOutputChain,
       inputToken: prev.outputToken,
       outputToken: prev.inputToken,
       inputAmount: ''
     }))
     setQuote(null)
-  }, [])
+    
+    // Switch to the new input chain if connected and it's different
+    if (isConnected && walletClient && newInputChain) {
+      const chainInfo = getChainInfo(newInputChain)
+      if (chainInfo && walletClient.chain?.id !== chainInfo.chainId) {
+        try {
+          await switchChain({ chainId: chainInfo.chainId })
+        } catch (error) {
+          console.error('Failed to switch chain after swap:', error)
+          // Don't block the UI if chain switch fails
+        }
+      }
+    }
+  }, [formData.outputChain, formData.inputChain, isConnected, walletClient, getChainInfo, switchChain])
 
   const clearForm = useCallback(async () => {
+    // Only clear the input amount, keep chains and tokens
+    setFormData(prev => ({
+      ...prev,
+      inputAmount: ''
+    }))
+
+    setQuote(null)
+    setStatus('idle')
+    setStatusMessage('')
+    setOrderHash('')
+    setApprovalStatus({ isApproved: false, allowance: '0', checking: false })
+  }, [])
+
+  const initializeDefaults = useCallback(async () => {
+    if (!aori || chainKeys.length === 0) return
+
+    // Always default to base as input chain
     const defaultInputChain = chainKeys.find(key => key === 'base') || chainKeys[0]
-    const defaultOutputChain = chainKeys.find(key => key === 'arbitrum') || chainKeys[1]
+    const defaultOutputChain = chainKeys.find(key => key === 'arbitrum') || 
+                              chainKeys.find(key => key !== defaultInputChain) || 
+                              chainKeys[1]
 
     if (chainKeys.length >= 2) {
       const inputTokens = getTokensByChain(defaultInputChain)
@@ -199,11 +241,12 @@ useEffect(() => {
         inputAmount: ''
       })
 
-      // Switch to the default input chain if connected
+      // Always switch to the default input chain when initializing
       if (isConnected && walletClient && defaultInputChain) {
         const chainInfo = getChainInfo(defaultInputChain)
         if (chainInfo && walletClient.chain?.id !== chainInfo.chainId) {
           try {
+            console.log(`Switching to default input chain: ${defaultInputChain} (${chainInfo.chainId})`)
             await switchChain({ chainId: chainInfo.chainId })
           } catch (error) {
             console.error('Failed to switch to default chain:', error)
@@ -211,22 +254,22 @@ useEffect(() => {
         }
       }
     }
-
-    setQuote(null)
-    setStatus('idle')
-    setStatusMessage('')
-    setOrderHash('')
-    setApprovalStatus({ isApproved: false, allowance: '0', checking: false })
-      }, [chainKeys, getTokensByChain, isConnected, walletClient, getChainInfo, switchChain])
+  }, [aori, chainKeys, isConnected, walletClient, getTokensByChain, getChainInfo, switchChain])
 
   // Set default form values when Aori instance is loaded (only after hydration)
   useEffect(() => {
     if (!mounted || !aori || chainKeys.length === 0) return
 
-    if (!formData.inputChain && !formData.outputChain) {
-      clearForm()
+    // Only set defaults if form is completely empty to avoid hydration mismatches
+    if (!formData.inputChain && !formData.outputChain && !formData.inputToken && !formData.outputToken) {
+      // Use setTimeout to ensure this runs after the current render cycle
+      const timer = setTimeout(() => {
+        initializeDefaults()
+      }, 0)
+      
+      return () => clearTimeout(timer)
     }
-  }, [mounted, aori, chainKeys, formData.inputChain, formData.outputChain, clearForm])
+  }, [mounted, aori, chainKeys.length, initializeDefaults]) // Added initializeDefaults to deps
 
   const handleGetQuote = useCallback(async () => {
     if (!address || !walletClient || !aori || !inputTokenInfo || !outputTokenInfo) {
@@ -285,6 +328,21 @@ useEffect(() => {
         checking: false
       })
       return true
+    }
+
+    // Get the chain info for the input chain
+    const inputChainInfo = getChainInfo(formData.inputChain)
+    if (!inputChainInfo) return false
+
+    // Ensure we're on the correct chain before making contract calls
+    if (walletClient.chain?.id !== inputChainInfo.chainId) {
+      console.warn(`Wallet is on chain ${walletClient.chain?.id} but trying to check approval on chain ${inputChainInfo.chainId}. Skipping approval check.`)
+      setApprovalStatus({
+        isApproved: false,
+        allowance: '0',
+        checking: false
+      })
+      return false
     }
 
     try {
@@ -535,6 +593,23 @@ useEffect(() => {
       return true
     }
 
+    // Get the chain info for the input chain
+    const inputChainInfo = getChainInfo(formData.inputChain)
+    if (!inputChainInfo) return false
+
+    // Ensure we're on the correct chain before making approval transaction
+    if (walletClient.chain?.id !== inputChainInfo.chainId) {
+      try {
+        await switchChain({ chainId: inputChainInfo.chainId })
+        // Wait a bit for the chain switch to complete
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      } catch (error) {
+        console.error('Failed to switch chain for approval:', error)
+        setStatusMessage('Failed to switch to correct chain for approval')
+        return false
+      }
+    }
+
     try {
       setStatus('approving')
       setStatusMessage('Requesting token approval...')
@@ -569,12 +644,32 @@ useEffect(() => {
     }
   }
 
+  // Don't render anything until hydration is complete
+  if (!mounted) {
+    return (
+      <div>
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">Swap</h2>
+          </div>
+          <div className="card-container">
+            <div className="card-content">
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--zinc-400)' }}>
+                Loading...
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
       <div className="card">
       <div className="card-header">
           <h2 className="card-title">Swap</h2>
-          {mounted && isConnected && (
+          {isConnected && (
             <button
               onClick={clearForm}
               className="btn btn-clear"
@@ -584,7 +679,7 @@ useEffect(() => {
           )}
         </div>
         <div className="card-container">
-        {mounted && !isConnected ? (
+        {!isConnected ? (
           <div className="card-content">
             <div className="wallet-connect">
               <svg className="wallet-connect-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -594,7 +689,7 @@ useEffect(() => {
               <p className="wallet-connect-subtitle">Connect your wallet to start swapping</p>
             </div>
           </div>
-        ) : mounted ? (
+        ) : (
           <div className="card-content-spaced">
             {/* From Token */}
             <div className="form-group">
@@ -781,17 +876,8 @@ useEffect(() => {
               </button>
             </div>
           </div>
-        ) : (
-          <div className="card-content">
-            <div className="loading-content">
-              Loading...
-            </div>
-          </div>
         )}
         </div>
-
-
-
       </div>
     </div>
   )

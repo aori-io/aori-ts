@@ -1,8 +1,10 @@
 'use client'
 
-import { useAori } from './providers/AoriProvider'
+import { useState } from 'react'
+import { useAori } from './AoriProvider'
 import { SwapForm } from './components/SwapForm'
 import { ActivityFeed } from './components/ActivityFeed'
+import CancelOrderModal from './components/CancelOrderModal'
 import Image from 'next/image'
 
 function LoadingOverlay({ isVisible, message }: { isVisible: boolean; message: string }) {
@@ -21,6 +23,7 @@ function LoadingOverlay({ isVisible, message }: { isVisible: boolean; message: s
 export default function CryptoSwap() {
   const aori = useAori()
   const isLoading = !aori
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false)
 
   return (
     <div className="page-container">
@@ -32,12 +35,12 @@ export default function CryptoSwap() {
             <p className="text-xl">Next.js Demo</p>
           </div>
           <div className="flex items-center gap-4">
-            <a 
-              href="/cancel" 
+            <button 
+              onClick={() => setIsCancelModalOpen(true)}
               className="btn btn-clear"
             >
-              Test Cancel
-            </a>
+              Cancel Demo
+            </button>
             <w3m-button balance="hide" />
           </div>
         </div>
@@ -52,6 +55,12 @@ export default function CryptoSwap() {
         <LoadingOverlay 
           isVisible={isLoading} 
           message="Initializing Aori SDK..." 
+        />
+
+        {/* Cancel Order Modal */}
+        <CancelOrderModal 
+          isOpen={isCancelModalOpen}
+          onClose={() => setIsCancelModalOpen(false)}
         />
       </div>
     </div>

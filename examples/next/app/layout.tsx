@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import { WalletProvider } from './providers/WalletProvider'
-import { AoriProvider } from './providers/AoriProvider'
+import { WalletProvider } from './WalletProvider'
+import { AoriProvider } from './AoriProvider'
 
 export const metadata: Metadata = {
   title: 'Aori Swap Example',
