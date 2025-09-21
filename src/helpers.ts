@@ -1,6 +1,6 @@
 import { ethers } from 'ethers';
 import { AORI_API, NATIVE_TOKEN_ADDRESS } from './constants';
-import { ChainInfo, DomainInfo, TokenInfo, QuoteRequest, QuoteResponse, ERC20QuoteResponse, NativeQuoteResponse, SignerType, SwapRequest, SwapResponse, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails, TransactionRequest, TransactionResponse, NativeSwapResponse, ERC20SwapResponse, SwapConfig, TxExecutor, Order, CancelOrderResponse, CancelTxExecutor, CancelTx } from './types';
+import { ChainInfo, DomainInfo, TokenInfoWithMetadata, TokenResponse, hasTokenMetadata, QuoteRequest, QuoteResponse, ERC20QuoteResponse, NativeQuoteResponse, SignerType, SwapRequest, SwapResponse, TypedDataSigner, OrderStatus, PollOrderStatusOptions, QueryOrdersParams, QueryOrdersResponse, OrderDetails, TransactionRequest, TransactionResponse, NativeSwapResponse, ERC20SwapResponse, SwapConfig, TxExecutor, Order, CancelOrderResponse, CancelTxExecutor, CancelTx } from './types';
 
 ////////////////////////////////////////////////////////////////*/
 //                      NATIVE TOKEN UTILITIES
@@ -436,14 +436,18 @@ export async function getDomain(
  * Fetches all tokens across all chains or for a specific chain
  * @param baseUrl The base URL of the API
  * @param apiKey Optional API key for authentication
- * @param chain Optional chain identifier to filter by - can be either chainId (number) or chainKey (string)
- * @returns All tokens or tokens filtered by chain
+ * @param options Configuration options including signal, chain filter, and metadata flag
+ * @returns All tokens or tokens filtered by chain, with or without metadata based on the metadata flag
  */
 export async function fetchAllTokens(
   baseUrl: string = AORI_API,
   apiKey?: string,
-  { signal, chain }: { signal?: AbortSignal; chain?: string | number } = {},
-): Promise<TokenInfo[]> {
+  { signal, chain, metadata }: { 
+    signal?: AbortSignal; 
+    chain?: string | number; 
+    metadata?: boolean; 
+  } = {},
+): Promise<TokenResponse[]> {
   try {
     const url = new URL('tokens', baseUrl);
 
@@ -454,6 +458,11 @@ export async function fetchAllTokens(
       } else {
         url.searchParams.set('chainId', chain.toString());
       }
+    }
+
+    // Add metadata parameter if requested
+    if (metadata === true) {
+      url.searchParams.set('metadata', 'true');
     }
 
     const response = await http({
@@ -474,16 +483,18 @@ export async function fetchAllTokens(
  * @param chain The chain identifier - can be either chainId (number) or chainKey (string)
  * @param baseUrl The base URL of the API
  * @param apiKey Optional API key for authentication
- * @returns The tokens for the specified chain
+ * @param options Configuration options including signal and metadata flag
+ * @returns The tokens for the specified chain, with or without metadata based on the metadata flag
  */
 export async function getTokens(
   chain: string | number,
   baseUrl: string = AORI_API,
   apiKey?: string,
-  { signal }: { signal?: AbortSignal } = {},
-): Promise<TokenInfo[]> {
-  return await fetchAllTokens(baseUrl, apiKey, { signal, chain });
+  { signal, metadata }: { signal?: AbortSignal; metadata?: boolean } = {},
+): Promise<TokenResponse[]> {
+  return await fetchAllTokens(baseUrl, apiKey, { signal, chain, metadata });
 }
+
 
 //////////////////////////////////////////////////////////////*/
 //                         GET A QUOTE

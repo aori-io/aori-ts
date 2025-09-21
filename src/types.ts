@@ -204,6 +204,25 @@ export interface TokenInfo {
     chainKey: string;
 }
 
+//========================================================
+//         Enhanced Token Info with Metadata
+//========================================================
+
+export interface TokenInfoWithMetadata extends TokenInfo {
+    name: string;
+    decimals: number;
+    price: number;
+    icon: string | null;
+}
+
+// Type guard to check if token has metadata
+export type TokenResponse = TokenInfo | TokenInfoWithMetadata;
+
+// Utility to check if token response includes metadata
+export function hasTokenMetadata(token: TokenResponse): token is TokenInfoWithMetadata {
+    return 'name' in token && 'decimals' in token && 'price' in token && 'icon' in token;
+}
+
 //============================================
 //          Order Status Interfaces
 //=============================================
