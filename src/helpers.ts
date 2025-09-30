@@ -1272,7 +1272,7 @@ export async function canCancel(
     // 1. It has a "received" event (was processed by the system)
     // 2. It does not have "completed" or "cancelled" events (not in terminal state)
     // 3. It has not expired (current time <= endTime)
-    const canBeCancelled = hasReceivedEvent && !hasCompletedEvent && !hasCancelledEvent && !hasExpired;
+    const canBeCancelled = hasReceivedEvent && !hasCompletedEvent && !hasCancelledEvent && hasExpired;
 
 
 
