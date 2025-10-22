@@ -90,6 +90,12 @@ export function SwapForm() {
     return 18
   }, [isNativeToken])
 
+  const getNativeSymbol = useCallback((chainKey: string): string => {
+    const key = (chainKey || '').toLowerCase()
+    if (key === 'bsc' || key === 'binance' || key === 'binancesmartchain') return 'BNB'
+    return 'ETH'
+  }, [])
+
   // Computed values (only after hydration to prevent SSR mismatches)
   const inputTokenInfo = mounted ? getTokenInfo(formData.inputToken, formData.inputChain) : undefined
   const outputTokenInfo = mounted ? getTokenInfo(formData.outputToken, formData.outputChain) : undefined
@@ -713,7 +719,7 @@ useEffect(() => {
                 >
                   {getTokensByChain(formData.inputChain).map((token, index) => (
                     <option key={`input-${formData.inputChain}-${index}-${token.address}`} value={token.address}>
-                      {isNativeToken(token.address) ? '⚡ ETH (Native)' : token.symbol}
+                      {isNativeToken(token.address) ? `⚡ ${getNativeSymbol(formData.inputChain)} (Native)` : token.symbol}
                     </option>
                   ))}
                 </select>
@@ -766,7 +772,7 @@ useEffect(() => {
                 >
                   {getTokensByChain(formData.outputChain).map((token, index) => (
                     <option key={`output-${formData.outputChain}-${index}-${token.address}`} value={token.address}>
-                      {isNativeToken(token.address) ? '⚡ ETH (Native)' : token.symbol}
+                      {isNativeToken(token.address) ? `⚡ ${getNativeSymbol(formData.outputChain)} (Native)` : token.symbol}
                     </option>
                   ))}
                 </select>
