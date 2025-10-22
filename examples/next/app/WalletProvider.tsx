@@ -2,7 +2,7 @@
 
 import { createAppKit } from '@reown/appkit/react'
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
-import { mainnet, arbitrum, base, optimism } from '@reown/appkit/networks'
+import { mainnet, arbitrum, base, optimism, bsc } from '@reown/appkit/networks'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider } from 'wagmi'
 import React from 'react'
@@ -25,7 +25,7 @@ const getAppUrl = () => {
 // 2. Create Wagmi Adapter
 const wagmiAdapter = new WagmiAdapter({
   projectId,
-  networks: [mainnet, arbitrum, base, optimism]
+  networks: [mainnet, arbitrum, base, optimism, bsc]
 })
 
 // 3. Create modal with proper error handling
@@ -34,7 +34,7 @@ let appKitInstance: any = null
 try {
   appKitInstance = createAppKit({
     adapters: [wagmiAdapter],
-    networks: [mainnet, arbitrum, base, optimism],
+    networks: [mainnet, arbitrum, base, optimism, bsc],
     projectId,
     metadata: {
       name: 'Aori Swap Example',
